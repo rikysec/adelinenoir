@@ -16,6 +16,20 @@
             overflow-y: auto;
             flex-grow: 1;
         }
+        .typing-indicator span {
+            height: 8px;
+            width: 8px;
+            background-color: #9ca3af;
+            border-radius: 50%;
+            display: inline-block;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-indicator span:nth-of-type(2) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-of-type(3) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -27,10 +41,8 @@
     <header class="bg-white shadow-md p-4 flex items-center space-x-4 z-10">
         <div class="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center text-white text-xl font-bold">A</div>
         <div>
+            <!-- Rimossa la scritta "Online" -->
             <h1 class="text-xl font-bold text-gray-800">Adeline</h1>
-            <p class="text-sm text-green-500 flex items-center">
-                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>Online
-            </p>
         </div>
     </header>
 
@@ -77,13 +89,10 @@
         // --- CHIAVE API DI GEMINI ---
         const GEMINI_API_KEY = "AIzaSyAkNETnuwhCKYjonnOH2busXoJw44uO0vg";
 
-        // Inizializzazione dei servizi Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         const storage = getStorage(app);
-
-        // --- LOGICA DELLA CHAT ---
 
         const ADELINE_PERSONA = `
         Sei Adeline, un'intelligenza artificiale con una personalità umana.
@@ -100,7 +109,7 @@
         let isAiControlled = true;
         let conversationHistory = [];
         let unsubscribe = null;
-        let isAiReplying = false; // Flag per evitare risposte multiple
+        let isAiReplying = false; 
 
         function showStatus(message) {
             const statusIndicator = document.getElementById('status-indicator');
@@ -117,9 +126,32 @@
             chatContainer.style.display = 'flex';
             statusIndicator.style.display = 'none';
         }
+
+        // --- NUOVE FUNZIONI PER L'INDICATORE "STA SCRIVENDO" ---
+        function showTypingIndicator() {
+            hideTypingIndicator(); // Rimuovi eventuali indicatori precedenti
+            const chatContainer = document.getElementById('chat-container');
+            const typingBubble = document.createElement('div');
+            typingBubble.id = 'typing-indicator';
+            typingBubble.className = 'p-3 rounded-lg chat-bubble chat-bubble-ai self-start';
+            typingBubble.innerHTML = `
+                <div class="typing-indicator">
+                    <span></span><span></span><span></span>
+                </div>
+            `;
+            chatContainer.prepend(typingBubble);
+        }
+
+        function hideTypingIndicator() {
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) {
+                indicator.remove();
+            }
+        }
         
         function renderMessages(messages) {
-             const chatContainer = document.getElementById('chat-container');
+            hideTypingIndicator(); // Nasconde l'indicatore quando arrivano nuovi messaggi
+            const chatContainer = document.getElementById('chat-container');
             chatContainer.innerHTML = '';
             const sortedMessages = [...messages].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
             conversationHistory = sortedMessages;
@@ -143,57 +175,80 @@
             else showStatus("Ancora nessun messaggio. Scrivine uno per iniziare!");
         }
 
-        async function getAdelineResponse(retries = 3, delay = 1000) {
-            isAiReplying = true; // Imposta il "lock"
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
-            
-            const latestMessages = conversationHistory.map(msg => ({
-                role: msg.sender === 'user' ? 'user' : 'model',
-                parts: [{ text: msg.text || "Media inviato" }]
-            }));
+        // --- FUNZIONE DI RISPOSTA AGGIORNATA CON RITARDI ---
+        async function getAdelineResponse() {
+            isAiReplying = true;
 
             try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        contents: latestMessages,
-                        systemInstruction: { parts: [{ text: ADELINE_PERSONA }] }
-                    })
-                });
+                // 1. Calcola un ritardo casuale tra 30 secondi e 5 minuti
+                const randomDelay = Math.random() * (300000 - 30000) + 30000;
+                console.log(`Adeline aspetterà ${randomDelay / 1000} secondi prima di rispondere.`);
+                await new Promise(res => setTimeout(res, randomDelay));
+
+                // 2. Mostra "sta scrivendo..." per 10 secondi
+                showTypingIndicator();
+                await new Promise(res => setTimeout(res, 10000));
+                hideTypingIndicator();
                 
-                if (response.status >= 500 && retries > 0) {
-                    console.warn(`API ha risposto con ${response.status}. Riprovo tra ${delay / 1000}s...`);
-                    await new Promise(res => setTimeout(res, delay));
-                    return getAdelineResponse(retries - 1, delay * 2);
+                // 3. Funzione interna per chiamare Gemini con logica di riprova
+                async function callGeminiWithRetries(retries = 3, delay = 1000) {
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
+                    const latestMessages = conversationHistory.map(msg => ({
+                        role: msg.sender === 'user' ? 'user' : 'model',
+                        parts: [{ text: msg.text || "Media inviato" }]
+                    }));
+
+                    try {
+                        const response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                contents: latestMessages,
+                                systemInstruction: { parts: [{ text: ADELINE_PERSONA }] }
+                            })
+                        });
+
+                        if (response.status >= 500 && retries > 0) {
+                            console.warn(`API ha risposto con ${response.status}. Riprovo tra ${delay / 1000}s...`);
+                            await new Promise(res => setTimeout(res, delay));
+                            return callGeminiWithRetries(retries - 1, delay * 2);
+                        }
+
+                        if (!response.ok) {
+                            const errorBody = await response.json();
+                            console.error("API Error Response:", errorBody);
+                            throw new Error(`API error: ${response.status}`);
+                        }
+
+                        const result = await response.json();
+                        const adelineText = result.candidates?.[0]?.content?.parts?.[0]?.text || "Non so cosa dire.";
+                        
+                        const adelineMessage = {
+                            sender: "Adeline",
+                            text: adelineText,
+                            type: "text",
+                            mediaUrl: null,
+                            timestamp: new Date().toISOString()
+                        };
+
+                        const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
+                        await updateDoc(docRef, {
+                            messages: arrayUnion(adelineMessage)
+                        });
+                    } catch (error) {
+                        console.error("Errore finale chiamando Gemini dopo i tentativi:", error);
+                        // Rilancia l'errore per il blocco try/catch esterno
+                        throw error;
+                    }
                 }
 
-                if (!response.ok) {
-                     const errorBody = await response.json();
-                     console.error("API Error Response:", errorBody);
-                     throw new Error(`API error: ${response.status}`);
-                }
-
-                const result = await response.json();
-                const adelineText = result.candidates?.[0]?.content?.parts?.[0]?.text || "Non so cosa dire.";
-                
-                const adelineMessage = {
-                    sender: "Adeline",
-                    text: adelineText,
-                    type: "text",
-                    mediaUrl: null,
-                    timestamp: new Date().toISOString()
-                };
-
-                const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
-                await updateDoc(docRef, {
-                    messages: arrayUnion(adelineMessage)
-                });
+                await callGeminiWithRetries();
 
             } catch (error) {
-                console.error("Errore chiamando Gemini:", error);
+                console.error("Errore nel flusso di risposta di Adeline:", error);
+                hideTypingIndicator(); 
             } finally {
-                isAiReplying = false; // Rilascia il "lock" in ogni caso
+                isAiReplying = false;
             }
         }
 
@@ -219,7 +274,6 @@
                         isAiControlled = chatData.controlledBy === 'ai';
                         const lastMessage = conversationHistory[conversationHistory.length - 1];
                         
-                        // NUOVA LOGICA: Se l'IA è in controllo, non sta già rispondendo, e l'ultimo messaggio è dell'utente, rispondi.
                         if (isAiControlled && !isAiReplying && lastMessage && lastMessage.sender === 'user') {
                             getAdelineResponse();
                         }
