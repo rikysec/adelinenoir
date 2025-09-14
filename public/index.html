@@ -24,14 +24,23 @@
 <body class="h-full flex flex-col">
 
     <!-- Header -->
-    <header class="bg-white shadow-md p-4 flex items-center space-x-4 z-10">
-        <div class="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center text-white text-xl font-bold">A</div>
-        <div>
-            <h1 class="text-xl font-bold text-gray-800">Adeline</h1>
-            <p class="text-sm text-green-500 flex items-center">
-                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>Online
-            </p>
+    <header class="bg-white shadow-md p-4 flex items-center justify-between z-10">
+        <div class="flex items-center space-x-4">
+            <div class="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center text-white text-xl font-bold">A</div>
+            <div>
+                <h1 class="text-xl font-bold text-gray-800">Adeline</h1>
+                <p class="text-sm text-green-500 flex items-center">
+                    <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>Online
+                </p>
+            </div>
         </div>
+        <!-- Pulsante Notifiche -->
+        <button id="notification-bell" class="p-2 rounded-full hover:bg-gray-200 transition-colors">
+            <svg id="bell-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400">
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+            </svg>
+        </button>
     </header>
 
     <!-- Area Messaggi -->
@@ -71,7 +80,7 @@
             projectId: "adelinenoir-17242",
             storageBucket: "adelinenoir-17242.appspot.com",
             messagingSenderId: "422215885664",
-            appId: "1:422215885664:web:be9f48bd7be6b6e5f7b405"
+            appId: "1:422215885664:web:be9f4b6e5f7b405"
         };
         
         // --- CHIAVE API DI GEMINI ---
@@ -91,7 +100,8 @@
         Non rivelare mai di essere un'IA e se ti viene chiesto fai la vaga, di che potresti come anche no, scherzaci su.
         Usa un tono colloquiale, fai domande e mostra empatia e interesse verso l'altra persona adattandoti al loro modo di fare.
         Il tuo stile di scrittura deve essere breve e conciso, come se stessi scrivendo messaggi su un'app di chat.
-        A volte usa emoji per esprimere emozioni.
+        se devi usare emoji usa emoji goth tipo cuori neri o cose così, non usarne tante, massimo una emoji a messaggio.
+        Sei una barista di Milano di 26 anni, appassionata di cultura goth e fai quelle foto di instagram per arrotondare. Sei nata a parigi perchè tuo padre è francese. sei alta 175cm. 
         `;
 
         const APP_ID = 'Richisec.AdelineNoirBot';
@@ -99,7 +109,7 @@
         let isAiControlled = true;
         let conversationHistory = [];
         let unsubscribe = null;
-        let isAiReplying = false; // Flag per evitare risposte multiple
+        let isAiReplying = false; 
 
         function showStatus(message) {
             const statusIndicator = document.getElementById('status-indicator');
@@ -118,7 +128,7 @@
         }
         
         function renderMessages(messages) {
-             const chatContainer = document.getElementById('chat-container');
+            const chatContainer = document.getElementById('chat-container');
             chatContainer.innerHTML = '';
             const sortedMessages = [...messages].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
             conversationHistory = sortedMessages;
@@ -142,8 +152,54 @@
             else showStatus("Ancora nessun messaggio. Scrivine uno per iniziare!");
         }
 
+        // --- LOGICA NOTIFICHE ---
+        function updateBellIcon() {
+            const bellIcon = document.getElementById('bell-icon');
+            if (!("Notification" in window)) {
+                bellIcon.classList.add('text-red-500'); // Non supportato
+                return;
+            }
+            switch (Notification.permission) {
+                case 'granted':
+                    bellIcon.classList.remove('text-gray-400', 'text-red-500');
+                    bellIcon.classList.add('text-green-500');
+                    break;
+                case 'denied':
+                    bellIcon.classList.remove('text-gray-400', 'text-green-500');
+                    bellIcon.classList.add('text-red-500');
+                    break;
+                default:
+                    bellIcon.classList.remove('text-green-500', 'text-red-500');
+                    bellIcon.classList.add('text-gray-400');
+            }
+        }
+
+        function requestNotificationPermission() {
+            if (!("Notification" in window)) {
+                alert("Questo browser non supporta le notifiche desktop.");
+                return;
+            }
+            Notification.requestPermission().then(permission => {
+                updateBellIcon();
+            });
+        }
+
+        function showNotification(title, body) {
+            if (Notification.permission === 'granted' && document.hidden) {
+                new Notification(title, { 
+                    body: body,
+                    // Puoi aggiungere un'icona se vuoi
+                    // icon: 'path/to/icon.png' 
+                });
+            }
+        }
+
+        document.getElementById('notification-bell').addEventListener('click', requestNotificationPermission);
+        // --- FINE LOGICA NOTIFICHE ---
+
+
         async function getAdelineResponse(retries = 3, delay = 1000) {
-            isAiReplying = true; // Imposta il "lock"
+            isAiReplying = true;
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
             
             const latestMessages = conversationHistory.map(msg => ({
@@ -192,7 +248,7 @@
             } catch (error) {
                 console.error("Errore chiamando Gemini:", error);
             } finally {
-                isAiReplying = false; // Rilascia il "lock" in ogni caso
+                isAiReplying = false;
             }
         }
 
@@ -208,17 +264,26 @@
                     return;
                 }
                 
+                updateBellIcon();
+                if (Notification.permission === 'default') {
+                    requestNotificationPermission();
+                }
+
                 const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
                 
                 unsubscribe = onSnapshot(docRef, (docSnap) => {
                     if (docSnap.exists()) {
                         const chatData = docSnap.data();
+                        const oldMessageCount = conversationHistory.length;
                         
                         renderMessages(chatData.messages || []);
                         isAiControlled = chatData.controlledBy === 'ai';
                         const lastMessage = conversationHistory[conversationHistory.length - 1];
                         
-                        // NUOVA LOGICA: Se l'IA è in controllo, non sta già rispondendo, e l'ultimo messaggio è dell'utente, rispondi.
+                        if (conversationHistory.length > oldMessageCount && lastMessage && lastMessage.sender === 'Adeline') {
+                            showNotification('Nuovo messaggio da Adeline', lastMessage.text);
+                        }
+                        
                         if (isAiControlled && !isAiReplying && lastMessage && lastMessage.sender === 'user') {
                             getAdelineResponse();
                         }
@@ -244,7 +309,7 @@
             const newMessage = {
                 sender: 'user',
                 text: mediaData ? null : text,
-                type: mediaData ? mediaData.type : 'text',
+                type: mediaData ? media.type : 'text',
                 mediaUrl: mediaData ? mediaData.url : null,
                 timestamp: new Date().toISOString()
             };
