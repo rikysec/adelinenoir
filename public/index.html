@@ -54,21 +54,38 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-send-horizontal"><path d="m3 3 3 9-3 9 19-9Z"/><path d="M6 12h16"/></svg>
             </button>
         </div>
-         <div id="upload-progress" class="h-1 bg-purple-500 mt-2" style="width: 0%; transition: width 0.3s;"></div>
+        <div id="upload-progress" class="h-1 bg-purple-500 mt-2" style="width: 0%; transition: width 0.3s;"></div>
     </footer>
 
-    <!-- Firebase SDK (versione per deploy CLI) -->
-    <script src="/__/firebase/10.12.2/firebase-app-compat.js"></script>
-    <script src="/__/firebase/10.12.2/firebase-auth-compat.js"></script>
-    <script src="/__/firebase/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="/__/firebase/10.12.2/firebase-storage-compat.js"></script>
-    <script src="/__/firebase/init.js"></script>
+    <!-- Firebase SDK (versione con chiavi dirette) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 
-    <script>
-        // Firebase viene inizializzato automaticamente da /__/firebase/init.js
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        const storage = firebase.storage();
+        // --- CONFIGURAZIONE FIREBASE ---
+        // Inserisci qui la configurazione del tuo progetto Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyAT1ahcUfjtwMiYkxUCsegcJha5-bqYQS0", // La tua chiave API Firebase
+            authDomain: "adelinenoir-17242.firebaseapp.com",
+            projectId: "adelinenoir-17242",
+            storageBucket: "adelinenoir-17242.appspot.com",
+            messagingSenderId: "422215885664",
+            appId: "1:422215885664:web:be9f48bd7be6b6e5f7b405"
+        };
+        
+        // --- CHIAVE API DI GEMINI ---
+        // Inserisci qui la chiave API che hai generato per il Language Model
+        const GEMINI_API_KEY = "AIzaSyAkNETnuwhCKYjonnOH2busXoJw44uO0vg";
+
+        // Inizializzazione dei servizi Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+
+        // --- LOGICA DELLA CHAT ---
 
         const ADELINE_PERSONA = `
         Sei Adeline, un'intelligenza artificiale con una personalità umana.
@@ -89,7 +106,6 @@
             const statusIndicator = document.getElementById('status-indicator');
             const statusText = document.getElementById('status-text');
             const chatContainer = document.getElementById('chat-container');
-
             chatContainer.style.display = 'none';
             statusIndicator.style.display = 'flex';
             statusText.textContent = message;
@@ -98,13 +114,12 @@
         function hideStatus() {
             const statusIndicator = document.getElementById('status-indicator');
             const chatContainer = document.getElementById('chat-container');
-
             chatContainer.style.display = 'flex';
             statusIndicator.style.display = 'none';
         }
-
+        
         function renderMessages(messages) {
-            const chatContainer = document.getElementById('chat-container');
+             const chatContainer = document.getElementById('chat-container');
             chatContainer.innerHTML = '';
 
             const sortedMessages = [...messages].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
@@ -120,23 +135,18 @@
                     textNode.textContent = msg.text;
                     bubble.appendChild(textNode);
                 } else if ((msg.type === 'image' || msg.type === 'video') && msg.mediaUrl) {
-                    // ... (codice per visualizzare media)
+                    // Logica per visualizzare media
                 }
                 chatContainer.appendChild(bubble);
             });
 
-            if (messages.length > 0) {
-                hideStatus();
-            } else {
-                showStatus("Ancora nessun messaggio. Scrivine uno per iniziare!");
-            }
+            if (messages.length > 0) hideStatus();
+            else showStatus("Ancora nessun messaggio. Scrivine uno per iniziare!");
         }
 
         async function getAdelineResponse() {
-             // IMPORTANTE: la chiave API viene gestita automaticamente da Firebase Hosting
-            const apiKey = firebase.app().options.apiKey;
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
+            
             const latestMessages = conversationHistory.map(msg => ({
                 role: msg.sender === 'user' ? 'user' : 'model',
                 parts: [{ text: msg.text || "Media inviato" }]
@@ -146,17 +156,21 @@
                 const response = await fetch(apiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                    body: JSON.stringify({ 
                         contents: latestMessages,
                         systemInstruction: { parts: [{ text: ADELINE_PERSONA }] }
                     })
                 });
 
-                if (!response.ok) throw new Error(`API error: ${response.status}`);
+                if (!response.ok) {
+                     const errorBody = await response.json();
+                     console.error("API Error Response:", errorBody);
+                     throw new Error(`API error: ${response.status}`);
+                }
 
                 const result = await response.json();
                 const adelineText = result.candidates?.[0]?.content?.parts?.[0]?.text || "Non so cosa dire.";
-
+                
                 const adelineMessage = {
                     sender: "Adeline",
                     text: adelineText,
@@ -165,9 +179,9 @@
                     timestamp: new Date().toISOString()
                 };
 
-                const docRef = db.collection("artifacts").doc(APP_ID).collection("public").doc("data").collection("chats").doc(chatId);
-                await docRef.update({
-                    messages: firebase.firestore.FieldValue.arrayUnion(adelineMessage)
+                const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
+                await updateDoc(docRef, {
+                    messages: arrayUnion(adelineMessage)
                 });
 
             } catch (error) {
@@ -177,8 +191,8 @@
 
         async function main() {
             try {
-                await auth.signInAnonymously();
-                console.log("Accesso anonimo riuscito.");
+                await signInAnonymously(auth);
+                console.log("Accesso anonimo a Firebase riuscito.");
 
                 const urlParams = new URLSearchParams(window.location.search);
                 chatId = urlParams.get('id');
@@ -187,19 +201,19 @@
                     showStatus("ID della chat non trovato nell'URL.");
                     return;
                 }
-
-                const docRef = db.collection("artifacts").doc(APP_ID).collection("public").doc("data").collection("chats").doc(chatId);
-
-                unsubscribe = docRef.onSnapshot((docSnap) => {
-                    if (docSnap.exists) {
+                
+                const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
+                
+                unsubscribe = onSnapshot(docRef, (docSnap) => {
+                    if (docSnap.exists()) {
                         const chatData = docSnap.data();
                         const oldMessageCount = conversationHistory.length;
-
+                        
                         renderMessages(chatData.messages || []);
                         isAiControlled = chatData.controlledBy === 'ai';
 
                         const lastMessage = conversationHistory[conversationHistory.length - 1];
-
+                        
                         if (isAiControlled && conversationHistory.length > oldMessageCount && lastMessage && lastMessage.sender === 'user') {
                             getAdelineResponse();
                         }
@@ -220,7 +234,6 @@
         window.sendMessage = async function(mediaData = null) {
             const messageInput = document.getElementById('message-input');
             const text = messageInput.value.trim();
-
             if (!text && !mediaData) return;
 
             const newMessage = {
@@ -231,14 +244,14 @@
                 timestamp: new Date().toISOString()
             };
 
-            const docRef = db.collection("artifacts").doc(APP_ID).collection("public").doc("data").collection("chats").doc(chatId);
-            await docRef.update({
-                messages: firebase.firestore.FieldValue.arrayUnion(newMessage)
+            const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
+            await updateDoc(docRef, {
+                messages: arrayUnion(newMessage)
             });
 
             if (messageInput) messageInput.value = '';
         }
-
+        
         window.uploadMedia = function() { /* ... */ }
         window.handleKeyDown = function(event) {
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -249,3 +262,4 @@
     </script>
 </body>
 </html>
+
