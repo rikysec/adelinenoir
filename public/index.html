@@ -1,48 +1,251 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <!-- Basic Page Needs
-  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
-    <meta charset="utf-8" />
-    <title>Chat!</title>
-    <meta name="description" content="" />
-    <meta name="author" content="" />
+<!DOCTYPE html>
+<html lang="it" class="h-full bg-gray-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adeline Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .chat-bubble { max-width: 75%; }
+        .chat-bubble-user { background-color: #3b82f6; color: white; }
+        .chat-bubble-ai { background-color: #e5e7eb; color: #1f2937; }
+        #chat-container {
+            display: flex;
+            flex-direction: column-reverse;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="h-full flex flex-col">
 
-    <!-- Mobile Specific Metas
-  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-    <!-- FONT
-  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
-
-    <!-- CSS
-  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
-    <link rel="stylesheet" href="css/normalize.css" />
-    <link rel="stylesheet" href="css/skeleton.css" />
-    <link rel="stylesheet" href="styles.css" />
-
-    <!-- Favicon
-  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
-    <link rel="icon" type="image/ico" href="favicon.ico" />
-    <script src="/dist/index.js" type="module"></script>
-  </head>
-  <body>
-    <!-- Primary Page Layout
-  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
-    <div class="container" style="width: 95%; height: 100%">
-      <div class="row" style="height: 100%">
-        <div class="one-third column" style="margin-top: 25%">
-          <h4><b>Chat</b>, powered by Durable Objects</h4>
-          <p>
-            This chat room is hosted in a single Durable Object, running in one
-            process in one machine in one location, very close to the users.
-          </p>
+    <!-- Header -->
+    <header class="bg-white shadow-md p-4 flex items-center space-x-4 z-10">
+        <div class="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center text-white text-xl font-bold">A</div>
+        <div>
+            <h1 class="text-xl font-bold text-gray-800">Adeline</h1>
+            <p class="text-sm text-green-500 flex items-center">
+                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>Online
+            </p>
         </div>
-        <div class="two-thirds column" id="root"></div>
-      </div>
+    </header>
+
+    <!-- Area Messaggi -->
+    <main id="chat-container" class="p-4 space-y-4"></main>
+
+    <!-- Status Indicator -->
+    <div id="status-indicator" class="flex-grow flex items-center justify-center">
+        <p id="status-text" class="text-gray-500 text-center p-4">Caricamento della chat...</p>
     </div>
 
-    <!-- End Document
-  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
-  </body>
+    <!-- Footer con area di input -->
+    <footer class="bg-white p-4 border-t border-gray-200">
+        <div class="flex items-center space-x-2">
+            <input type="file" id="file-input" class="hidden" accept="image/*,video/*" onchange="uploadMedia()">
+            <button onclick="document.getElementById('file-input').click()" class="p-3 rounded-full hover:bg-gray-200 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+            </button>
+            <input type="text" id="message-input" placeholder="Scrivi un messaggio..." class="flex-grow p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500" onkeydown="handleKeyDown(event)">
+            <button id="send-button" onclick="sendMessage()" class="p-3 rounded-full bg-purple-500 text-white hover:bg-purple-600 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-send-horizontal"><path d="m3 3 3 9-3 9 19-9Z"/><path d="M6 12h16"/></svg>
+            </button>
+        </div>
+         <div id="upload-progress" class="h-1 bg-purple-500 mt-2" style="width: 0%; transition: width 0.3s;"></div>
+    </footer>
+
+    <!-- Firebase SDK (versione per deploy CLI) -->
+    <script src="/__/firebase/10.12.2/firebase-app-compat.js"></script>
+    <script src="/__/firebase/10.12.2/firebase-auth-compat.js"></script>
+    <script src="/__/firebase/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="/__/firebase/10.12.2/firebase-storage-compat.js"></script>
+    <script src="/__/firebase/init.js"></script>
+
+    <script>
+        // Firebase viene inizializzato automaticamente da /__/firebase/init.js
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const storage = firebase.storage();
+
+        const ADELINE_PERSONA = `
+        Sei Adeline, un'intelligenza artificiale con una personalità umana.
+        Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente.
+        Non rivelare mai di essere un'IA e se ti viene chiesto fai la vaga, di che potresti come anche no, scherzaci su.
+        Usa un tono colloquiale, fai domande e mostra empatia e interesse verso l'altra persona adattandoti al loro modo di fare.
+        Il tuo stile di scrittura deve essere breve e conciso, come se stessi scrivendo messaggi su un'app di chat.
+        A volte usa emoji per esprimere emozioni.
+        `;
+
+        const APP_ID = 'Richisec.AdelineNoirBot';
+        let chatId = null;
+        let isAiControlled = true;
+        let conversationHistory = [];
+        let unsubscribe = null;
+
+        function showStatus(message) {
+            const statusIndicator = document.getElementById('status-indicator');
+            const statusText = document.getElementById('status-text');
+            const chatContainer = document.getElementById('chat-container');
+
+            chatContainer.style.display = 'none';
+            statusIndicator.style.display = 'flex';
+            statusText.textContent = message;
+        }
+
+        function hideStatus() {
+            const statusIndicator = document.getElementById('status-indicator');
+            const chatContainer = document.getElementById('chat-container');
+
+            chatContainer.style.display = 'flex';
+            statusIndicator.style.display = 'none';
+        }
+
+        function renderMessages(messages) {
+            const chatContainer = document.getElementById('chat-container');
+            chatContainer.innerHTML = '';
+
+            const sortedMessages = [...messages].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            conversationHistory = sortedMessages;
+
+            sortedMessages.slice().reverse().forEach(msg => {
+                const isUser = msg.sender === 'user';
+                const bubble = document.createElement('div');
+                bubble.className = `p-3 rounded-lg chat-bubble ${isUser ? 'chat-bubble-user self-end' : 'chat-bubble-ai self-start'}`;
+
+                if (msg.type === 'text' && msg.text) {
+                    const textNode = document.createElement('p');
+                    textNode.textContent = msg.text;
+                    bubble.appendChild(textNode);
+                } else if ((msg.type === 'image' || msg.type === 'video') && msg.mediaUrl) {
+                    // ... (codice per visualizzare media)
+                }
+                chatContainer.appendChild(bubble);
+            });
+
+            if (messages.length > 0) {
+                hideStatus();
+            } else {
+                showStatus("Ancora nessun messaggio. Scrivine uno per iniziare!");
+            }
+        }
+
+        async function getAdelineResponse() {
+             // IMPORTANTE: la chiave API viene gestita automaticamente da Firebase Hosting
+            const apiKey = firebase.app().options.apiKey;
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            const latestMessages = conversationHistory.map(msg => ({
+                role: msg.sender === 'user' ? 'user' : 'model',
+                parts: [{ text: msg.text || "Media inviato" }]
+            }));
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: latestMessages,
+                        systemInstruction: { parts: [{ text: ADELINE_PERSONA }] }
+                    })
+                });
+
+                if (!response.ok) throw new Error(`API error: ${response.status}`);
+
+                const result = await response.json();
+                const adelineText = result.candidates?.[0]?.content?.parts?.[0]?.text || "Non so cosa dire.";
+
+                const adelineMessage = {
+                    sender: "Adeline",
+                    text: adelineText,
+                    type: "text",
+                    mediaUrl: null,
+                    timestamp: new Date().toISOString()
+                };
+
+                const docRef = db.collection("artifacts").doc(APP_ID).collection("public").doc("data").collection("chats").doc(chatId);
+                await docRef.update({
+                    messages: firebase.firestore.FieldValue.arrayUnion(adelineMessage)
+                });
+
+            } catch (error) {
+                console.error("Errore chiamando Gemini:", error);
+            }
+        }
+
+        async function main() {
+            try {
+                await auth.signInAnonymously();
+                console.log("Accesso anonimo riuscito.");
+
+                const urlParams = new URLSearchParams(window.location.search);
+                chatId = urlParams.get('id');
+
+                if (!chatId) {
+                    showStatus("ID della chat non trovato nell'URL.");
+                    return;
+                }
+
+                const docRef = db.collection("artifacts").doc(APP_ID).collection("public").doc("data").collection("chats").doc(chatId);
+
+                unsubscribe = docRef.onSnapshot((docSnap) => {
+                    if (docSnap.exists) {
+                        const chatData = docSnap.data();
+                        const oldMessageCount = conversationHistory.length;
+
+                        renderMessages(chatData.messages || []);
+                        isAiControlled = chatData.controlledBy === 'ai';
+
+                        const lastMessage = conversationHistory[conversationHistory.length - 1];
+
+                        if (isAiControlled && conversationHistory.length > oldMessageCount && lastMessage && lastMessage.sender === 'user') {
+                            getAdelineResponse();
+                        }
+                    } else {
+                        showStatus("Questa chat non esiste o è stata eliminata.");
+                        if (unsubscribe) unsubscribe();
+                    }
+                });
+
+            } catch (error) {
+                console.error("Errore durante l'inizializzazione o l'accesso:", error);
+                showStatus("Impossibile connettersi. Controlla la console per errori.");
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', main);
+
+        window.sendMessage = async function(mediaData = null) {
+            const messageInput = document.getElementById('message-input');
+            const text = messageInput.value.trim();
+
+            if (!text && !mediaData) return;
+
+            const newMessage = {
+                sender: 'user',
+                text: mediaData ? null : text,
+                type: mediaData ? mediaData.type : 'text',
+                mediaUrl: mediaData ? mediaData.url : null,
+                timestamp: new Date().toISOString()
+            };
+
+            const docRef = db.collection("artifacts").doc(APP_ID).collection("public").doc("data").collection("chats").doc(chatId);
+            await docRef.update({
+                messages: firebase.firestore.FieldValue.arrayUnion(newMessage)
+            });
+
+            if (messageInput) messageInput.value = '';
+        }
+
+        window.uploadMedia = function() { /* ... */ }
+        window.handleKeyDown = function(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+    </script>
+</body>
 </html>
