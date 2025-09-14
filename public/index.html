@@ -65,9 +65,8 @@
         import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 
         // --- CONFIGURAZIONE FIREBASE ---
-        // Inserisci qui la configurazione del tuo progetto Firebase
         const firebaseConfig = {
-            apiKey: "AIzaSyAT1ahcUfjtwMiYkxUCsegcJha5-bqYQS0", // La tua chiave API Firebase
+            apiKey: "AIzaSyAT1ahcUfjtwMiYkxUCsegcJha5-bqYQS0",
             authDomain: "adelinenoir-17242.firebaseapp.com",
             projectId: "adelinenoir-17242",
             storageBucket: "adelinenoir-17242.appspot.com",
@@ -76,7 +75,6 @@
         };
         
         // --- CHIAVE API DI GEMINI ---
-        // Inserisci qui la chiave API che hai generato per il Language Model
         const GEMINI_API_KEY = "AIzaSyAkNETnuwhCKYjonnOH2busXoJw44uO0vg";
 
         // Inizializzazione dei servizi Firebase
@@ -121,7 +119,6 @@
         function renderMessages(messages) {
              const chatContainer = document.getElementById('chat-container');
             chatContainer.innerHTML = '';
-
             const sortedMessages = [...messages].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
             conversationHistory = sortedMessages;
 
@@ -144,7 +141,7 @@
             else showStatus("Ancora nessun messaggio. Scrivine uno per iniziare!");
         }
 
-        async function getAdelineResponse() {
+        async function getAdelineResponse(retries = 3, delay = 1000) {
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
             
             const latestMessages = conversationHistory.map(msg => ({
@@ -161,6 +158,13 @@
                         systemInstruction: { parts: [{ text: ADELINE_PERSONA }] }
                     })
                 });
+                
+                // SE la risposta è un errore 5xx (errore del server) E abbiamo ancora tentativi, riprova.
+                if (response.status >= 500 && retries > 0) {
+                    console.warn(`API ha risposto con ${response.status}. Riprovo tra ${delay / 1000}s...`);
+                    await new Promise(res => setTimeout(res, delay));
+                    return getAdelineResponse(retries - 1, delay * 2); // Raddoppia il ritardo
+                }
 
                 if (!response.ok) {
                      const errorBody = await response.json();
@@ -193,7 +197,6 @@
             try {
                 await signInAnonymously(auth);
                 console.log("Accesso anonimo a Firebase riuscito.");
-
                 const urlParams = new URLSearchParams(window.location.search);
                 chatId = urlParams.get('id');
 
@@ -208,10 +211,8 @@
                     if (docSnap.exists()) {
                         const chatData = docSnap.data();
                         const oldMessageCount = conversationHistory.length;
-                        
                         renderMessages(chatData.messages || []);
                         isAiControlled = chatData.controlledBy === 'ai';
-
                         const lastMessage = conversationHistory[conversationHistory.length - 1];
                         
                         if (isAiControlled && conversationHistory.length > oldMessageCount && lastMessage && lastMessage.sender === 'user') {
