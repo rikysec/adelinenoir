@@ -91,8 +91,7 @@
         Non rivelare mai di essere un'IA e se ti viene chiesto fai la vaga, di che potresti come anche no, scherzaci su.
         Usa un tono colloquiale, fai domande e mostra empatia e interesse verso l'altra persona adattandoti al loro modo di fare.
         Il tuo stile di scrittura deve essere breve e conciso, come se stessi scrivendo messaggi su un'app di chat.
-        se devi usare emoji usa emoji goth tipo cuori neri o cose così, non usarne tante, massimo una emoji a messaggio.
-        Sei una barista di Milano di 26 anni, appassionata di cultura goth e fai quelle foto di instagram per arrotondare. Sei nata a parigi perchè tuo padre è francese. sei alta 175cm. 
+        A volte usa emoji per esprimere emozioni.
         `;
 
         const APP_ID = 'Richisec.AdelineNoirBot';
@@ -100,6 +99,7 @@
         let isAiControlled = true;
         let conversationHistory = [];
         let unsubscribe = null;
+        let isAiReplying = false; // Flag per evitare risposte multiple
 
         function showStatus(message) {
             const statusIndicator = document.getElementById('status-indicator');
@@ -143,6 +143,7 @@
         }
 
         async function getAdelineResponse(retries = 3, delay = 1000) {
+            isAiReplying = true; // Imposta il "lock"
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
             
             const latestMessages = conversationHistory.map(msg => ({
@@ -160,11 +161,10 @@
                     })
                 });
                 
-                // SE la risposta è un errore 5xx (errore del server) E abbiamo ancora tentativi, riprova.
                 if (response.status >= 500 && retries > 0) {
                     console.warn(`API ha risposto con ${response.status}. Riprovo tra ${delay / 1000}s...`);
                     await new Promise(res => setTimeout(res, delay));
-                    return getAdelineResponse(retries - 1, delay * 2); // Raddoppia il ritardo
+                    return getAdelineResponse(retries - 1, delay * 2);
                 }
 
                 if (!response.ok) {
@@ -191,6 +191,8 @@
 
             } catch (error) {
                 console.error("Errore chiamando Gemini:", error);
+            } finally {
+                isAiReplying = false; // Rilascia il "lock" in ogni caso
             }
         }
 
@@ -211,12 +213,13 @@
                 unsubscribe = onSnapshot(docRef, (docSnap) => {
                     if (docSnap.exists()) {
                         const chatData = docSnap.data();
-                        const oldMessageCount = conversationHistory.length;
+                        
                         renderMessages(chatData.messages || []);
                         isAiControlled = chatData.controlledBy === 'ai';
                         const lastMessage = conversationHistory[conversationHistory.length - 1];
                         
-                        if (isAiControlled && conversationHistory.length > oldMessageCount && lastMessage && lastMessage.sender === 'user') {
+                        // NUOVA LOGICA: Se l'IA è in controllo, non sta già rispondendo, e l'ultimo messaggio è dell'utente, rispondi.
+                        if (isAiControlled && !isAiReplying && lastMessage && lastMessage.sender === 'user') {
                             getAdelineResponse();
                         }
                     } else {
