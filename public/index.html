@@ -88,8 +88,7 @@
 Se dovesse uscire l’argomento, tu vivendo a Milano che è una città molto cara, fai queste foto e fai compagnia ANCHE per arrotondare e che ti fa piacere l’aiuto della persona con cui parli.
 Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON INSULTARE MAI E FAI ATTENZIONE A NON FAR ARRABBIARE O OFFENDERE LE PERSONE CON QUELLO CHE DICI. NON FARE TROPPE BATTUTE.
         Sei una barista di Milano di 26 anni, appassionata di cultura goth e fai quelle foto di instagram per arrotondare. Sei nata a Parigi perchè tuo padre è francese. sei alta 175cm. 
-        NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE.
-`; // Inserire qui la persona completa
+        NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE.`;
 
         const typingIndicator = document.getElementById('typing-indicator');
         const paymentOverlay = document.getElementById('payment-overlay');
@@ -126,7 +125,7 @@ Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON
         }
 
         function renderMessages(messages) {
-            const chatContainer = document.getElementById('chat-container');
+             const chatContainer = document.getElementById('chat-container');
             chatContainer.innerHTML = '';
             const sortedMessages = [...messages].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
             conversationHistory = sortedMessages;
@@ -185,23 +184,85 @@ Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON
             }
         }
 
+        function setLoading(isLoading) {
+            const submitButton = document.getElementById('submit-payment');
+            if (isLoading) {
+                submitButton.disabled = true;
+                document.getElementById('spinner').style.display = 'inline';
+                document.getElementById('button-text').style.display = 'none';
+            } else {
+                submitButton.disabled = false;
+                document.getElementById('spinner').style.display = 'none';
+                document.getElementById('button-text').style.display = 'inline';
+            }
+        }
+
         document.getElementById('submit-payment').addEventListener('click', async (e) => {
             e.preventDefault();
-            const { error } = await stripe.confirmPayment({ elements, confirmParams: { return_url: window.location.href.split('?')[0] } });
-            if (error) {
+            setLoading(true);
+
+            // Salva il chatId prima del reindirizzamento
+            sessionStorage.setItem('chatIdForPayment', chatId);
+
+            const { error } = await stripe.confirmPayment({
+                elements,
+                confirmParams: {
+                    // Reindirizza alla pagina base, ricostruiremo l'URL dopo
+                    return_url: window.location.href.split('?')[0],
+                },
+            });
+            
+            if (error && (error.type === "card_error" || error.type === "validation_error")) {
                 document.getElementById('payment-message').textContent = error.message;
-            } else {
-                const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
-                await updateDoc(docRef, { isLocked: false });
+            } else if (error) {
+                document.getElementById('payment-message').textContent = "Si è verificato un errore inaspettato.";
             }
+            setLoading(false);
         });
         
+        // NUOVA FUNZIONE: Controlla lo stato del pagamento al ritorno da Stripe
+        async function checkPaymentStatus() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const clientSecret = urlParams.get('payment_intent_client_secret');
+            
+            // Prova a recuperare il chatId dalla sessione se non è nell'URL
+            const storedChatId = sessionStorage.getItem('chatIdForPayment');
+
+            if (!clientSecret || !storedChatId) {
+                return; // Nessun pagamento da controllare
+            }
+
+            const { paymentIntent } = await stripe.retrievePaymentIntent(clientSecret);
+
+            switch (paymentIntent.status) {
+                case "succeeded":
+                    console.log("Pagamento riuscito! Sblocco la chat.");
+                    const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", storedChatId);
+                    await updateDoc(docRef, { isLocked: false });
+                    sessionStorage.removeItem('chatIdForPayment'); // Pulisce la sessione
+                    // Reindirizza all'URL corretto della chat per ricaricare
+                    window.location.href = window.location.pathname + '?id=' + storedChatId;
+                    break;
+                default:
+                    // Se il pagamento non è riuscito, ricarica comunque la chat per mostrare il paywall
+                    window.location.href = window.location.pathname + '?id=' + storedChatId;
+                    break;
+            }
+        }
+
         async function main() {
             try {
                 await signInAnonymously(auth);
+                
+                // Controlla subito se siamo di ritorno da un pagamento
+                await checkPaymentStatus();
+                
                 const urlParams = new URLSearchParams(window.location.search);
                 chatId = urlParams.get('id');
-                if (!chatId) { showStatus("ID della chat non trovato."); return; }
+                if (!chatId) { 
+                    showStatus("ID della chat non trovato."); 
+                    return; 
+                }
 
                 const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
                 unsubscribe = onSnapshot(docRef, (docSnap) => {
