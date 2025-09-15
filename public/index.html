@@ -24,11 +24,11 @@
     <div id="payment-overlay" class="absolute inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50 opacity-0 pointer-events-none">
         <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full text-center">
             <h2 class="text-2xl font-bold text-gray-800 mb-4">Chat Bloccata</h2>
-            <p class="text-gray-600 mb-6">Per continuare la conversazione con Adeline, è richiesto un contributo di 5,00€.</p>
+            <p class="text-gray-600 mb-6">Per continuare la conversazione con Adeline, è richiesto un contributo di 4,99€.</p>
             <!-- L'elemento di pagamento di Stripe verrà montato qui -->
             <div id="payment-element" class="mb-6"></div>
             <button id="submit-payment" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400">
-                <span id="button-text">Paga ora 5,00€</span>
+                <span id="button-text">Paga ora 4,99€</span>
                 <span id="spinner" class="hidden">Elaborazione...</span>
             </button>
             <p id="payment-message" class="text-sm text-red-500 mt-4"></p>
@@ -67,7 +67,7 @@
         const firebaseConfig = { apiKey: "AIzaSyAT1ahcUfjtwMiYkxUCsegcJha5-bqYQS0", authDomain: "adelinenoir-17242.firebaseapp.com", projectId: "adelinenoir-17242", storageBucket: "adelinenoir-17242.appspot.com", messagingSenderId: "422215885664", appId: "1:422215885664:web:be9f48bd7be6b6e5f7b405" };
         const GEMINI_API_KEY = "AIzaSyAkNETnuwhCKYjonnOH2busXoJw44uO0vg";
         // IMPORTANTE: Sostituisci con la tua chiave PUBBLICABILE di Stripe
-        const STRIPE_PUBLISHABLE_KEY = "pk_test_YOUR_PUBLISHABLE_KEY"; 
+        const STRIPE_PUBLISHABLE_KEY = "pk_live_51S7jp1B75yXJ4j6QR9wfss6vBbUmrm5N97xejx0IY5sb7zuBlkOsd8Zoey1gkqMW2Wt1ZbR180OF5xhZJerOqVsT00winnXPdI"; 
         
         // --- INIZIALIZZAZIONE ---
         const app = initializeApp(firebaseConfig);
