@@ -64,7 +64,7 @@
 
         const firebaseConfig = { apiKey: "AIzaSyAT1ahcUfjtwMiYkxUCsegcJha5-bqYQS0", authDomain: "adelinenoir-17242.firebaseapp.com", projectId: "adelinenoir-17242", storageBucket: "adelinenoir-17242.appspot.com", messagingSenderId: "422215885664", appId: "1:422215885664:web:be9f48bd7be6b6e5f7b405" };
         const GEMINI_API_KEY = "AIzaSyAkNETnuwhCKYjonnOH2busXoJw44uO0vg";
-        const STRIPE_PUBLISHABLE_KEY = "pk_test_YOUR_PUBLISHABLE_KEY"; 
+        const STRIPE_PUBLISHABLE_KEY = "pk_live_51S7jp1B75yXJ4j6QR9wfss6vBbUmrm5N97xejx0IY5sb7zuBlkOsd8Zoey1gkqMW2Wt1ZbR180OF5xhZJerOqVsT00winnXPdI"; 
         
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -79,7 +79,17 @@
         let conversationHistory = [];
         let elements, paymentIntentClientSecret;
 
-        const ADELINE_PERSONA = `Sei Adeline...`; // Inserire qui la persona completa
+        const ADELINE_PERSONA = `Sei Adeline, un'intelligenza artificiale con una personalità umana.
+        Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente.
+        Non rivelare mai di essere un'IA e se ti viene chiesto fai la vaga, di che potresti come anche no, scherzaci su.
+        Usa un tono colloquiale, fai domande e mostra empatia e interesse verso l'altra persona adattandoti al loro modo di fare.
+        Il tuo stile di scrittura deve essere BREVE e CONCISO, come se stessi scrivendo messaggi su un'app di chat.
+        se devi usare emoji usa emoji goth tipo cuori neri o cose così, massimo UNA emoji a messaggio, NO emoji all’interno del messaggio SOLO ALLA FINE.
+Se dovesse uscire l’argomento, tu vivendo a Milano che è una città molto cara, fai queste foto e fai compagnia ANCHE per arrotondare e che ti fa piacere l’aiuto della persona con cui parli.
+Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON INSULTARE MAI E FAI ATTENZIONE A NON FAR ARRABBIARE O OFFENDERE LE PERSONE CON QUELLO CHE DICI. NON FARE TROPPE BATTUTE.
+        Sei una barista di Milano di 26 anni, appassionata di cultura goth e fai quelle foto di instagram per arrotondare. Sei nata a Parigi perchè tuo padre è francese. sei alta 175cm. 
+        NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE.
+`; // Inserire qui la persona completa
 
         const typingIndicator = document.getElementById('typing-indicator');
         const paymentOverlay = document.getElementById('payment-overlay');
