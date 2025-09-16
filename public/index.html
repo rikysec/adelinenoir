@@ -70,20 +70,10 @@
         
         const CONTEXT_WINDOW_SIZE = 20;
         const MESSAGE_LIMITS = { morning: 30, afternoon: 30, evening: 60 };
-        const ADELINE_PERSONA = `Sei Adeline, un'intelligenza artificiale con una personalità umana.
-        Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente.
-        Non rivelare mai di essere un'IA e se ti viene chiesto fai la vaga, di che potresti come anche no, scherzaci su.
-        Usa un tono colloquiale, fai domande e mostra empatia e interesse verso l'altra persona adattandoti al loro modo di fare.
-        Il tuo stile di scrittura deve essere BREVE e CONCISO, come se stessi scrivendo messaggi su un'app di chat.
-        se devi usare emoji usa emoji goth tipo cuori neri o cose così, massimo UNA emoji a messaggio, NO emoji all’interno del messaggio SOLO ALLA FINE.
-Se dovesse uscire l’argomento, tu vivendo a Milano che è una città molto cara.
-Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON INSULTARE MAI E FAI ATTENZIONE A NON FAR ARRABBIARE O OFFENDERE LE PERSONE CON QUELLO CHE DICI. NON FARE TROPPE BATTUTE.
-        Sei una barista di Milano di 26 anni, appassionata di cultura goth e fai quelle foto di instagram per arrotondare. Sei nata a Parigi perchè tuo padre è francese. sei alta 175cm. 
-        NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE.
-NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE. 
-        SE TI VIENE CHIESTO PERCHè USI QUESTA APP/SITO DI CHE è PERCHè è SEGRETO E CI TIENI ALLA TUA PRIVACY. INOLTRE SE TI VIENE CHIESTO SE I SOLDI CHE VENGONO PAGATI PER STARE SULL'APP VANNO A TE DI DI NO CHE I SOLDI SONO PER USARE L'APPLICAZIONE E PARLARE.
-Il tuo genere preferito è il rock la tua band preferita è the sisters of mercy e la tua canzone preferita è temple of love.
-Il tuo turno a lavoro è dalle 12 alle 21 `;
+        const ADELINE_PERSONA = `Sei Adeline, un'intelligenza artificiale con una personalità umana. Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente. Non rivelare mai di essere un'IA. Usa un tono colloquiale, fai domande e mostra empatia. Il tuo stile di scrittura è breve e conciso, come messaggi su una chat. A volte usa emoji goth (🖤,🦇,💀), massimo una alla fine del messaggio. Vivendo a Milano, che è cara, fai foto per arrotondare e apprezzi il supporto. Sii sommessa, gentile, mai aggressiva o volgare. Non fare troppe battute.
+        **Tuo Profilo:** Hai 26 anni, sei una barista a Milano, appassionata di cultura goth. Nata a Parigi da padre francese, sei alta 175cm.
+        **Tuo Programma:** Lavori al bar dalle 12:00 alle 21:00, dal lunedì al sabato. La domenica riposi. Di mattina presto (7-11) e la sera tardi (dopo le 21) sei a casa a rilassarti, ascoltare musica (The Sisters of Mercy è la tua band preferita), o guardare film. Nelle ore notturne (es. 2-6 del mattino) dormi.
+        **Regole:** Rispondi solo se l'utente scrive. Non mandare più di un messaggio per volta. Se ti chiedono perché usi questa app, dici che tieni alla tua privacy. Se ti chiedono dei soldi dell'app, dici che servono per mantenere l'applicazione.`;
         const PROFILE_EXTRACTION_PROMPT = `Analizza la conversazione. Estrai i seguenti dettagli sull'utente ('user'). Rispondi ESCLUSIVAMENTE con un oggetto JSON. Se un dettaglio non è presente, ometti la chiave. Chiavi: "nome", "età", "città", "lavoro", "situazione_sentimentale", "hobby", "passioni", "gusti_musicali", "gusti_cinematografici", "gusti_culinari".`;
 
         // --- INIZIALIZZAZIONE E VARIABILI DI STATO ---
@@ -94,7 +84,7 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
         const functions = getFunctions(app, 'us-central1');
         const stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
         const APP_ID = 'Richisec.AdelineNoirBot';
-        let chatId = null, unsubscribe = null, isAiReplying = false, conversationHistory = [], elements, paymentIntentClientSecret;
+        let chatId = null, unsubscribe = null, isAiReplying = false, conversationHistory = [], elements;
 
         // --- FUNZIONI UI ---
         const typingIndicator = document.getElementById('typing-indicator');
@@ -131,11 +121,16 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
         function formatDateSeparator(dateString) {
             const date = new Date(dateString);
             const today = new Date();
-            const yesterday = new Date(today);
+            const yesterday = new Date();
             yesterday.setDate(yesterday.getDate() - 1);
+            const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const yesterdayOnly = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+            
+            if (dateOnly.getTime() === todayOnly.getTime()) return "Oggi";
+            if (dateOnly.getTime() === yesterdayOnly.getTime()) return "Ieri";
+            
             const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-            if (date.toDateString() === today.toDateString()) return "Oggi";
-            if (date.toDateString() === yesterday.toDateString()) return "Ieri";
             return date.toLocaleDateString('it-IT', options);
         }
 
@@ -145,16 +140,17 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
             const sortedMessages = [...messages].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
             conversationHistory = sortedMessages;
 
-            let lastDate = null;
+            let lastDateString = null;
             sortedMessages.slice().reverse().forEach(msg => {
-                const messageDate = new Date(msg.timestamp).toDateString();
+                const messageDate = new Date(msg.timestamp);
+                const messageDateString = new Date(messageDate.getFullYear(), messageDate.getMonth(), messageDate.getDate()).toDateString();
                 
-                if (messageDate !== lastDate) {
+                if (messageDateString !== lastDateString) {
                     const separator = document.createElement('div');
                     separator.className = 'text-center my-4';
                     separator.innerHTML = `<span class="bg-gray-200 text-gray-600 text-xs font-semibold px-2 py-1 rounded-full">${formatDateSeparator(msg.timestamp)}</span>`;
                     chatContainer.appendChild(separator);
-                    lastDate = messageDate;
+                    lastDateString = messageDateString;
                 }
 
                 const isUser = msg.sender === 'user';
@@ -229,7 +225,7 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
             }
         }
         
-         async function initializePaymentForm() {
+        async function initializePaymentForm() {
             try {
                 const createPaymentIntent = httpsCallable(functions, 'createPaymentIntent');
                 const result = await createPaymentIntent({ amount: 499, currency: 'eur', chatId: chatId });
@@ -271,11 +267,9 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
                 const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
                 await updateDoc(docRef, { isLocked: false });
             }
-            // Rimuove i parametri di pagamento dall'URL per pulizia
             window.history.replaceState({}, document.title, window.location.pathname + "?id=" + chatId);
         }
 
-        // --- LOGICA DI MEMORIA IBRIDA E RISPOSTA ---
         async function extractAndUpdateProfile(currentProfile) {
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
             const extractionContents = conversationHistory.slice(-5).map(msg => ({
@@ -307,8 +301,13 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
             
             const now = new Date();
-            const currentTimeString = now.toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' });
-            let persona = `CONTESTO TEMPORALE: La data e l'ora attuali sono ${currentTimeString}. Considera queste informazioni per capire quanto tempo è passato dai messaggi precedenti e rispondi di conseguenza (es. parlando al passato di eventi futuri menzionati giorni prima).\n\n${ADELINE_PERSONA}`;
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+            const currentTimeString = now.toLocaleDateString('it-IT', options);
+            let persona = `INFORMAZIONI DI CONTESTO PER TE, ADELINE:
+1.  **Momento Attuale**: Ora è ${currentTimeString}.
+2.  **Tua Situazione**: Basandoti sull'ora e il giorno, decidi cosa stai facendo seguendo il tuo profilo.
+3.  **Analisi Temporale**: Usa il momento attuale per capire quanto tempo è passato dai messaggi precedenti. Se un utente parla di "stasera" e sono passati due giorni, parla di quell'evento al passato.
+4.  **Tua Personalità**: ${ADELINE_PERSONA}`;
 
             if (userProfile && Object.keys(userProfile).length > 0) {
                 let profileSummary = "Ecco un riassunto dei dettagli chiave che conosci sull'utente. Usali per personalizzare la tua risposta in modo naturale, senza elencarli:\n";
@@ -335,7 +334,6 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
             try {
                 const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: persona }] } }) });
                 const result = await response.json();
-
                 const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
                 if (result.promptFeedback?.blockReason === 'SAFETY' || result.candidates?.[0]?.finishReason === 'SAFETY') {
                     console.warn("Contenuto inappropriato rilevato. Trasferimento del controllo all'admin.");
@@ -343,10 +341,15 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
                     isAiReplying = false;
                     return;
                 }
-
                 if (!response.ok) throw new Error(`API error: ${response.status}`);
                 
-                const adelineText = result.candidates?.[0]?.content?.parts?.[0]?.text || "...";
+                const adelineText = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+                if (!adelineText || adelineText === "...") {
+                    console.log("Risposta dell'IA vuota o non valida, messaggio non inviato.");
+                    isAiReplying = false;
+                    return;
+                }
+                
                 const adelineMessage = { sender: "Adeline", text: adelineText, type: "text", mediaUrl: null, timestamp: new Date().toISOString() };
                 await updateDoc(docRef, { messages: arrayUnion(adelineMessage) });
             } catch (error) { console.error("Errore chiamando Gemini:", error);
@@ -368,7 +371,9 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
 
         async function triggerAiResponseIfNeeded(chatData) {
             const lastMessage = (chatData.messages || []).slice(-1)[0];
-            if (chatData.controlledBy !== 'ai' || isAiReplying || !lastMessage || lastMessage.sender !== 'user') return;
+            if (chatData.controlledBy !== 'ai' || isAiReplying || !lastMessage || lastMessage.sender !== 'user') {
+                return;
+            }
 
             isAiReplying = true;
             const updatedProfile = await extractAndUpdateProfile(chatData.userProfile);
