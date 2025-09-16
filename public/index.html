@@ -229,17 +229,21 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
             }
         }
         
-        async function initializePaymentForm() {
+         async function initializePaymentForm() {
             try {
-                const createPaymentIntent = httpsCallable(functions, 'createPaymentIntent');
-                const result = await createPaymentIntent({ amount: 499, currency: 'eur', chatId: chatId });
-                const { clientSecret } = result.data;
+                const CLOUD_FUNCTION_URL = "https://us-central1-adelinenoir-17242.cloudfunctions.net/createPaymentIntent";
+                const response = await fetch(CLOUD_FUNCTION_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ amount: 499, currency: 'eur' })
+                });
+                const { clientSecret } = await response.json();
                 elements = stripe.elements({ clientSecret });
                 const paymentElement = elements.create("payment");
                 paymentElement.mount("#payment-element");
             } catch (error) {
                  document.getElementById('payment-message').textContent = "Errore nell'inizializzare il pagamento.";
-                 console.error("Errore chiamata a Cloud Function:", error);
+                 console.error("Errore inizializzazione pagamento:", error);
             }
         }
 
