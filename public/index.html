@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Adeline Chat</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://js.stripe.com/v3/"></script> <!-- SDK di Stripe -->
+    <script src="https://js.stripe.com/v3/"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
         .chat-bubble { max-width: 75%; }
@@ -23,9 +23,8 @@
     <!-- Schermata di Pagamento (nascosta di default) -->
     <div id="payment-overlay" class="absolute inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50 opacity-0 pointer-events-none">
         <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full text-center">
-<h2 class="text-2xl font-bold text-gray-800 mb-4">Chat Interrotta</h2>
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Chat Interrotta</h2>
             <p class="text-gray-600 mb-6">Funzionalità Premium terminata, continua per riaprire la chat e continuare a parlare</p>
-
             <div id="payment-element" class="mb-6"></div>
             <button id="submit-payment" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400">
                 <span id="button-text">Paga ora 4,99€</span>
@@ -60,12 +59,12 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+        import { getFirestore, doc, onSnapshot, updateDoc, arrayUnion, increment } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 
         const firebaseConfig = { apiKey: "AIzaSyAT1ahcUfjtwMiYkxUCsegcJha5-bqYQS0", authDomain: "adelinenoir-17242.firebaseapp.com", projectId: "adelinenoir-17242", storageBucket: "adelinenoir-17242.appspot.com", messagingSenderId: "422215885664", appId: "1:422215885664:web:be9f48bd7be6b6e5f7b405" };
         const GEMINI_API_KEY = "AIzaSyAkNETnuwhCKYjonnOH2busXoJw44uO0vg";
-        const STRIPE_PUBLISHABLE_KEY = "pk_live_51S7jp1B75yXJ4j6QR9wfss6vBbUmrm5N97xejx0IY5sb7zuBlkOsd8Zoey1gkqMW2Wt1ZbR180OF5xhZJerOqVsT00winnXPdI"; 
+        const STRIPE_PUBLISHABLE_KEY = "pk_live_51S7jp1B75yXJ4j6QR9wfss6vBbUmrm5N97xejx0IY5sb7zuBlkOsd8Zoey1gkqMW2Wt1ZbR180OF5xhZJerOqVsT00winnXPdI";
         
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -80,8 +79,7 @@
         let conversationHistory = [];
         let elements, paymentIntentClientSecret;
 
-        // CORREZIONE: Ho sistemato il testo della persona per rimuovere errori di sintassi.
-        const ADELINE_PERSONA = `Sei Adeline, un'intelligenza artificiale con una personalità umana.
+        const ADELINE_PERSONA = `Sei Adeline. Ti sei assentata per un po'. Inizia la tua risposta scusandoti per il ritardo o per l'assenza in modo naturale (es: "Scusami, ero un po' presa..."), poi rispondi all'ultimo messaggio dell'utente. Sei Adeline, un'intelligenza artificiale con una personalità umana.
         Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente.
         Non rivelare mai di essere un'IA e se ti viene chiesto fai la vaga, di che potresti come anche no, scherzaci su.
         Usa un tono colloquiale, fai domande e mostra empatia e interesse verso l'altra persona adattandoti al loro modo di fare.
@@ -92,16 +90,19 @@ Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON
         Sei una barista di Milano di 26 anni, appassionata di cultura goth e fai quelle foto di instagram per arrotondare. Sei nata a Parigi perchè tuo padre è francese. sei alta 175cm. 
         NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE.
 NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE. 
-        SE TI VIENE CHIESTO PERCHè USI QUESTA APP/SITO DI CHE è PERCHè è SEGRETO E CI TIENI ALLA TUA PRIVACY. INOLTRE SE TI VIENE CHIESTO SE I SOLDI CHE VENGONO PAGATI PER STARE SULL'APP VANNO A TE DI DI NO CHE I SOLDI SONO PER USARE L'APPLICAZIONE E PARLARE.`;
-
+        SE TI VIENE CHIESTO PERCHè USI QUESTA APP/SITO DI CHE è PERCHè è SEGRETO E CI TIENI ALLA TUA PRIVACY. INOLTRE SE TI VIENE CHIESTO SE I SOLDI CHE VENGONO PAGATI PER STARE SULL'APP VANNO A TE DI DI NO CHE I SOLDI SONO PER USARE L'APPLICAZIONE E PARLARE.
+Il tuo genere preferito è il rock la tua band preferita è the sisters of mercy e la tua canzone preferita è temple of love.
+Il tuo turno a lavoro è dalle 12 alle 21 `;
+        
+        const MESSAGE_LIMITS = { morning: 30, afternoon: 30, evening: 60 };
         const typingIndicator = document.getElementById('typing-indicator');
-        const paymentOverlay = document.getElementById('payment-overlay');
-        const mainContent = document.getElementById('main-content');
         
         function showTyping() { typingIndicator.style.display = 'block'; }
         function hideTyping() { typingIndicator.style.display = 'none'; }
         
         async function handleLockState(isLocked) {
+            const paymentOverlay = document.getElementById('payment-overlay');
+            const mainContent = document.getElementById('main-content');
             if (isLocked) {
                 mainContent.classList.add('blur-sm', 'pointer-events-none');
                 paymentOverlay.classList.remove('opacity-0', 'pointer-events-none');
@@ -129,7 +130,7 @@ NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIV
         }
 
         function renderMessages(messages) {
-             const chatContainer = document.getElementById('chat-container');
+            const chatContainer = document.getElementById('chat-container');
             chatContainer.innerHTML = '';
             const sortedMessages = [...messages].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
             conversationHistory = sortedMessages;
@@ -168,10 +169,15 @@ NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIV
             });
         }
 
-        async function getAdelineResponse(retries = 3, delay = 1000) {
+        async function getAdelineResponse(isResuming = false) {
             isAiReplying = true;
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
             
+            let persona = ADELINE_PERSONA;
+            if (isResuming) {
+                persona = `Sei Adeline. Ti sei assentata per un po'. Inizia la tua risposta scusandoti per il ritardo o per l'assenza in modo naturale (es: "Scusami, ero un po' presa..."), poi rispondi all'ultimo messaggio dell'utente. ${ADELINE_PERSONA}`;
+            }
+
             const contents = [];
             for (const msg of conversationHistory) {
                 const role = msg.sender === 'user' ? 'user' : 'model';
@@ -180,7 +186,6 @@ NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIV
                 if (msg.type === 'image' && msg.mediaUrl) {
                     try {
                         const base64Data = await imageUrlToBase64(msg.mediaUrl);
-                        // CORREZIONE: Usa camelCase (inlineData, mimeType) per il corpo della richiesta API
                         parts.push({ inlineData: { mimeType: 'image/jpeg', data: base64Data } });
                     } catch (e) {
                         parts.push({ text: "(Immagine non caricata)" });
@@ -190,10 +195,10 @@ NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIV
             }
 
             try {
-                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: ADELINE_PERSONA }] } }) });
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: persona }] } }) });
                 if (!response.ok) { throw new Error(`API error: ${response.status}`); }
                 const result = await response.json();
-                const adelineText = result.candidates?.[0]?.content?.parts?.[0]?.text || "Interessante...";
+                const adelineText = result.candidates?.[0]?.content?.parts?.[0]?.text || "...";
                 const adelineMessage = { sender: "Adeline", text: adelineText, type: "text", mediaUrl: null, timestamp: new Date().toISOString() };
                 const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
                 await updateDoc(docRef, { messages: arrayUnion(adelineMessage) });
@@ -202,6 +207,76 @@ NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIV
             } finally {
                 isAiReplying = false;
             }
+        }
+
+        function getCurrentDateString(date = new Date()) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function getTimeSlot(date = new Date()) {
+            const hour = date.getHours();
+            if (hour >= 7 && hour <= 13) return 'morning';
+            if (hour > 13 && hour <= 20) return 'afternoon';
+            return 'evening';
+        }
+
+        async function triggerAiResponseIfNeeded(chatData) {
+            const lastMessage = (chatData.messages || []).slice(-1)[0];
+            if (chatData.controlledBy !== 'ai' || isAiReplying || !lastMessage || lastMessage.sender !== 'user') {
+                return;
+            }
+
+            const now = new Date();
+            const currentDateString = getCurrentDateString(now);
+            const currentSlot = getTimeSlot(now);
+            
+            const lastMessageDate = new Date(lastMessage.timestamp);
+            const lastMessageDateString = getCurrentDateString(lastMessageDate);
+            const lastMessageSlot = getTimeSlot(lastMessageDate);
+
+            const usageToday = chatData.usage?.[currentDateString] || { morning: 0, afternoon: 0, evening: 0 };
+            
+            const morningUsed = usageToday.morning || 0;
+            const afternoonUsed = usageToday.afternoon || 0;
+            const eveningUsed = usageToday.evening || 0;
+            
+            const isResuming = currentDateString !== lastMessageDateString || currentSlot !== lastMessageSlot;
+
+            let currentLimit = 0;
+            let currentUsage = 0;
+
+            if (currentSlot === 'morning') {
+                currentLimit = MESSAGE_LIMITS.morning;
+                currentUsage = morningUsed;
+            } else if (currentSlot === 'afternoon') {
+                currentLimit = MESSAGE_LIMITS.afternoon;
+                currentUsage = afternoonUsed;
+            } else {
+                const rollover = Math.max(0, MESSAGE_LIMITS.morning - morningUsed) + Math.max(0, MESSAGE_LIMITS.afternoon - afternoonUsed);
+                currentLimit = MESSAGE_LIMITS.evening + rollover;
+                currentUsage = eveningUsed;
+            }
+            
+            if (currentUsage >= currentLimit) {
+                return;
+            }
+
+            isAiReplying = true;
+            const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
+            await updateDoc(docRef, { [`usage.${currentDateString}.${currentSlot}`]: increment(1) });
+            
+            let delay = isResuming ? Math.floor(Math.random() * (600000 - 300000 + 1)) + 300000 : Math.floor(Math.random() * (300000 - 30000 + 1)) + 30000;
+
+            setTimeout(() => {
+                showTyping();
+                setTimeout(() => {
+                    hideTyping();
+                    getAdelineResponse(isResuming);
+                }, 10000);
+            }, delay);
         }
         
         window.sendMessage = async function(mediaData = null) {
@@ -247,11 +322,7 @@ NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIV
         async function initializePaymentForm() {
             try {
                 const CLOUD_FUNCTION_URL = "https://us-central1-adelinenoir-17242.cloudfunctions.net/createPaymentIntent";
-                const response = await fetch(CLOUD_FUNCTION_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ amount: 499, currency: 'eur' })
-                });
+                const response = await fetch(CLOUD_FUNCTION_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: 499, currency: 'eur' }) });
                 const { clientSecret } = await response.json();
                 elements = stripe.elements({ clientSecret });
                 const paymentElement = elements.create("payment");
@@ -308,7 +379,7 @@ NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIV
                 await checkPaymentStatus();
                 
                 const urlParams = new URLSearchParams(window.location.search);
-                chatId = urlParams.get('id');
+                chatId = urlParams.get('id') || sessionStorage.getItem('chatIdForPayment');
                 if (!chatId) {
                     const storedChatId = sessionStorage.getItem('chatIdForPayment');
                     if(storedChatId) {
@@ -325,18 +396,7 @@ NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIV
                         const chatData = docSnap.data();
                         handleLockState(chatData.isLocked || false);
                         renderMessages(chatData.messages || []);
-                        const lastMessage = (chatData.messages || []).slice(-1)[0];
-                        
-                        if (chatData.controlledBy === 'ai' && !isAiReplying && lastMessage && lastMessage.sender === 'user') {
-                            const randomDelay = Math.floor(Math.random() * (300000 - 30000 + 1)) + 30000;
-                            setTimeout(() => {
-                                showTyping();
-                                setTimeout(() => {
-                                    hideTyping();
-                                    getAdelineResponse();
-                                }, 10000);
-                            }, randomDelay);
-                        }
+                        triggerAiResponseIfNeeded(chatData);
                     } else {
                         showStatus("Questa chat non esiste o è stata eliminata.");
                     }
