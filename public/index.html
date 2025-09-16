@@ -335,18 +335,22 @@
                 const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: persona }] } }) });
                 const result = await response.json();
                 const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
-                if (result.promptFeedback?.blockReason === 'SAFETY' || result.candidates?.[0]?.finishReason === 'SAFETY') {
+                const safetyBlock = result.promptFeedback?.blockReason === 'SAFETY' || result.candidates?.[0]?.finishReason === 'SAFETY';
+
+                if (safetyBlock) {
                     console.warn("Contenuto inappropriato rilevato. Trasferimento del controllo all'admin.");
                     await updateDoc(docRef, { controlledBy: "admin" });
                     isAiReplying = false;
                     return;
                 }
+
                 if (!response.ok) throw new Error(`API error: ${response.status}`);
                 
                 const adelineText = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-                if (!adelineText || adelineText === "...") {
+                const uselessResponses = ["...", "Non so cosa dire."];
+                if (!adelineText || uselessResponses.includes(adelineText)) {
                     console.log("Risposta dell'IA vuota o non valida, messaggio non inviato.");
-                    isAiReplying = false;
+                    isAiReplying = false; 
                     return;
                 }
                 
