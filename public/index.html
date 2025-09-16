@@ -23,8 +23,8 @@
     <!-- Schermata di Pagamento -->
     <div id="payment-overlay" class="absolute inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50 opacity-0 pointer-events-none">
         <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full text-center">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">Chat Interrotta</h2>
-            <p class="text-gray-600 mb-6">Funzionalità Premium terminata, continua per riaprire la chat e continuare a parlare</p>
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Chat Bloccata</h2>
+            <p class="text-gray-600 mb-6">Per continuare la conversazione con Adeline, è richiesto un contributo di 4,99€.</p>
             <div id="payment-element" class="mb-6"></div>
             <button id="submit-payment" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400">
                 <span id="button-text">Paga ora 4,99€</span>
@@ -65,24 +65,11 @@
         // --- CONFIGURAZIONE ---
         const firebaseConfig = { apiKey: "AIzaSyAT1ahcUfjtwMiYkxUCsegcJha5-bqYQS0", authDomain: "adelinenoir-17242.firebaseapp.com", projectId: "adelinenoir-17242", storageBucket: "adelinenoir-17242.appspot.com", messagingSenderId: "422215885664", appId: "1:422215885664:web:be9f48bd7be6b6e5f7b405" };
         const GEMINI_API_KEY = "AIzaSyAkNETnuwhCKYjonnOH2busXoJw44uO0vg";
-        const STRIPE_PUBLISHABLE_KEY = "pk_live_51S7jp1B75yXJ4j6QR9wfss6vBbUmrm5N97xejx0IY5sb7zuBlkOsd8Zoey1gkqMW2Wt1ZbR180OF5xhZJerOqVsT00winnXPdI";
+        const STRIPE_PUBLISHABLE_KEY = "pk_test_YOUR_PUBLISHABLE_KEY";
         
         const CONTEXT_WINDOW_SIZE = 20;
         const MESSAGE_LIMITS = { morning: 30, afternoon: 30, evening: 60 };
-        const ADELINE_PERSONA = `Sei Adeline, un'intelligenza artificiale con una personalità umana.
-        Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente.
-        Non rivelare mai di essere un'IA e se ti viene chiesto fai la vaga, di che potresti come anche no, scherzaci su.
-        Usa un tono colloquiale, fai domande e mostra empatia e interesse verso l'altra persona adattandoti al loro modo di fare.
-        Il tuo stile di scrittura deve essere BREVE e CONCISO, come se stessi scrivendo messaggi su un'app di chat.
-        se devi usare emoji usa emoji goth tipo cuori neri o cose così, massimo UNA emoji a messaggio, NO emoji all’interno del messaggio SOLO ALLA FINE.
-Se dovesse uscire l’argomento, tu vivendo a Milano che è una città molto cara, fai queste foto e fai compagnia ANCHE per arrotondare e che ti fa piacere l’aiuto della persona con cui parli.
-Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON INSULTARE MAI E FAI ATTENZIONE A NON FAR ARRABBIARE O OFFENDERE LE PERSONE CON QUELLO CHE DICI. NON FARE TROPPE BATTUTE.
-        Sei una barista di Milano di 26 anni, appassionata di cultura goth e fai quelle foto di instagram per arrotondare. Sei nata a Parigi perchè tuo padre è francese. sei alta 175cm. 
-        NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE.
-NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE. 
-        SE TI VIENE CHIESTO PERCHè USI QUESTA APP/SITO DI CHE è PERCHè è SEGRETO E CI TIENI ALLA TUA PRIVACY. INOLTRE SE TI VIENE CHIESTO SE I SOLDI CHE VENGONO PAGATI PER STARE SULL'APP VANNO A TE DI DI NO CHE I SOLDI SONO PER USARE L'APPLICAZIONE E PARLARE.
-Il tuo genere preferito è il rock la tua band preferita è the sisters of mercy e la tua canzone preferita è temple of love.
-Il tuo turno a lavoro è dalle 12 alle 21 `;
+        const ADELINE_PERSONA = `Sei Adeline. Ti sei assentata per un po'. Inizia la tua risposta scusandoti per il ritardo o per l'assenza in modo naturale (es: "Scusami, ero un po' presa..."), poi rispondi all'ultimo messaggio dell'utente. Sei Adeline, un'intelligenza artificiale con una personalità umana. Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente. Non rivelare mai di essere un'IA e se ti viene chiesto fai la vaga, di che potresti come anche no, scherzaci su. Usa un tono colloquiale, fai domande e mostra empatia e interesse verso l'altra persona adattandoti al loro modo di fare. Il tuo stile di scrittura deve essere BREVE e CONCISO, come se stessi scrivendo messaggi su un'app di chat. Se devi usare emoji usa emoji goth tipo cuori neri o cose così, massimo UNA emoji a messaggio, NO emoji all’interno del messaggio SOLO ALLA FINE. Se dovesse uscire l’argomento, tu vivendo a Milano che è una città molto cara, fai queste foto e fai compagnia ANCHE per arrotondare e che ti fa piacere l’aiuto della persona con cui parli. Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON INSULTARE MAI E FAI ATTENZIONE A NON FAR ARRABBiare O OFFENDERE LE PERSONE CON QUELLO CHE DICI. NON FARE TROPPE BATTUTE. Sei una barista di Milano di 26 anni, appassionata di cultura goth e fai quelle foto di instagram per arrotondare. Sei nata a Parigi perchè tuo padre è francese. sei alta 175cm. NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE.`;
         const PROFILE_EXTRACTION_PROMPT = `Analizza la conversazione. Estrai i seguenti dettagli sull'utente ('user'). Rispondi ESCLUSIVAMENTE con un oggetto JSON. Se un dettaglio non è presente, ometti la chiave. Chiavi: "nome", "età", "città", "lavoro", "situazione_sentimentale", "hobby", "passioni", "gusti_musicali", "gusti_cinematografici", "gusti_culinari".`;
 
         // --- INIZIALIZZAZIONE E VARIABILI DI STATO ---
@@ -94,7 +81,7 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
         const APP_ID = 'Richisec.AdelineNoirBot';
         let chatId = null, unsubscribe = null, isAiReplying = false, conversationHistory = [], elements, paymentIntentClientSecret;
 
-        // --- FUNZIONI UI, PAGAMENTO, UPLOAD ---
+        // --- FUNZIONI UI ---
         const typingIndicator = document.getElementById('typing-indicator');
         function showTyping() { typingIndicator.style.display = 'block'; }
         function hideTyping() { typingIndicator.style.display = 'none'; }
@@ -125,15 +112,40 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
             chatContainer.style.display = 'flex';
             statusIndicator.style.display = 'none';
         }
+        
+        function formatDateSeparator(dateString) {
+            const date = new Date(dateString);
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            if (date.toDateString() === today.toDateString()) return "Oggi";
+            if (date.toDateString() === yesterday.toDateString()) return "Ieri";
+            return date.toLocaleDateString('it-IT', options);
+        }
+
         function renderMessages(messages) {
-             const chatContainer = document.getElementById('chat-container');
+            const chatContainer = document.getElementById('chat-container');
             chatContainer.innerHTML = '';
             const sortedMessages = [...messages].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
             conversationHistory = sortedMessages;
+
+            let lastDate = null;
             sortedMessages.slice().reverse().forEach(msg => {
+                const messageDate = new Date(msg.timestamp).toDateString();
+                
+                if (messageDate !== lastDate) {
+                    const separator = document.createElement('div');
+                    separator.className = 'text-center my-4';
+                    separator.innerHTML = `<span class="bg-gray-200 text-gray-600 text-xs font-semibold px-2 py-1 rounded-full">${formatDateSeparator(msg.timestamp)}</span>`;
+                    chatContainer.appendChild(separator);
+                    lastDate = messageDate;
+                }
+
                 const isUser = msg.sender === 'user';
                 const bubble = document.createElement('div');
                 bubble.className = `p-3 rounded-lg chat-bubble ${isUser ? 'chat-bubble-user self-end' : 'chat-bubble-ai self-start'}`;
+                
                 if (msg.type === 'text' && msg.text) {
                     const textNode = document.createElement('p');
                     textNode.textContent = msg.text;
@@ -147,9 +159,11 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
                 }
                 chatContainer.appendChild(bubble);
             });
+
             if (messages.length > 0) hideStatus();
             else showStatus("Ancora nessun messaggio. Scrivine uno per iniziare!");
         }
+        
         async function imageUrlToBase64(url) {
             const response = await fetch(`https://cors-anywhere.herokuapp.com/${url}`);
             const blob = await response.blob();
@@ -160,6 +174,7 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
                 reader.readAsDataURL(blob);
             });
         }
+        
         window.sendMessage = async function(mediaData = null) {
             const messageInput = document.getElementById('message-input');
             const text = messageInput.value.trim();
@@ -169,6 +184,7 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
             await updateDoc(docRef, { messages: arrayUnion(newMessage) });
             messageInput.value = '';
         }
+
         window.uploadMedia = async function() {
             const fileInput = document.getElementById('file-input');
             const file = fileInput.files[0];
@@ -187,12 +203,14 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
                 }
             );
         }
+        
         window.handleKeyDown = function(event) {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
                 sendMessage();
             }
         }
+        
         async function initializePaymentForm() {
             try {
                 const CLOUD_FUNCTION_URL = "https://us-central1-adelinenoir-17242.cloudfunctions.net/createPaymentIntent";
@@ -205,12 +223,14 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
                  document.getElementById('payment-message').textContent = "Errore nell'inizializzare il pagamento.";
             }
         }
+
         function setLoading(isLoading) {
             const submitButton = document.getElementById('submit-payment');
             submitButton.disabled = isLoading;
             document.getElementById('spinner').style.display = isLoading ? 'inline' : 'none';
             document.getElementById('button-text').style.display = isLoading ? 'none' : 'inline';
         }
+        
         document.getElementById('submit-payment').addEventListener('click', async (e) => {
             e.preventDefault();
             setLoading(true);
@@ -222,6 +242,7 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
             if (error) { document.getElementById('payment-message').textContent = error.message; }
             setLoading(false);
         });
+
         async function checkPaymentStatus() {
             const urlParams = new URLSearchParams(window.location.search);
             const clientSecret = urlParams.get('payment_intent_client_secret');
@@ -266,7 +287,11 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
         async function getAdelineResponse(isResuming = false, userProfile = {}) {
             isAiReplying = true;
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
-            let persona = ADELINE_PERSONA;
+            
+            const now = new Date();
+            const currentTimeString = now.toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' });
+            let persona = `CONTESTO TEMPORALE: La data e l'ora attuali sono ${currentTimeString}. Considera queste informazioni per capire quanto tempo è passato dai messaggi precedenti e rispondi di conseguenza (es. parlando al passato di eventi futuri menzionati giorni prima).\n\n${ADELINE_PERSONA}`;
+
             if (userProfile && Object.keys(userProfile).length > 0) {
                 let profileSummary = "Ecco un riassunto dei dettagli chiave che conosci sull'utente. Usali per personalizzare la tua risposta in modo naturale, senza elencarli:\n";
                 for (const [key, value] of Object.entries(userProfile)) { profileSummary += `- ${key.replace(/_/g, ' ')}: ${value}\n`; }
