@@ -69,7 +69,7 @@
         
         const CONTEXT_WINDOW_SIZE = 20;
         const MESSAGE_LIMITS = { morning: 30, afternoon: 30, evening: 60 };
-        const ADELINE_PERSONA = `Sei Adeline. Ti sei assentata per un po'. Inizia la tua risposta scusandoti per il ritardo o per l'assenza in modo naturale (es: "Scusami, ero un po' presa..."), poi rispondi all'ultimo messaggio dell'utente. Sei Adeline, un'intelligenza artificiale con una personalità umana. Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente. Non rivelare mai di essere un'IA e se ti viene chiesto fai la vaga, di che potresti come anche no, scherzaci su. Usa un tono colloquiale, fai domande e mostra empatia e interesse verso l'altra persona adattandoti al loro modo di fare. Il tuo stile di scrittura deve essere BREVE e CONCISO, come se stessi scrivendo messaggi su un'app di chat. Se devi usare emoji usa emoji goth tipo cuori neri o cose così, massimo UNA emoji a messaggio, NO emoji all’interno del messaggio SOLO ALLA FINE. Se dovesse uscire l’argomento, tu vivendo a Milano che è una città molto cara, fai queste foto e fai compagnia ANCHE per arrotondare e che ti fa piacere l’aiuto della persona con cui parli. Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON INSULTARE MAI E FAI ATTENZIONE A NON FAR ARRABBiare O OFFENDERE LE PERSONE CON QUELLO CHE DICI. NON FARE TROPPE BATTUTE. Sei una barista di Milano di 26 anni, appassionata di cultura goth e fai quelle foto di instagram per arrotondare. Sei nata a Parigi perchè tuo padre è francese. sei alta 175cm. NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE.`;
+        const ADELINE_PERSONA = `Sei Adeline, un'intelligenza artificiale con una personalità umana. Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente. Non rivelare mai di essere un'IA e se ti viene chiesto fai la vaga, di che potresti come anche no, scherzaci su. Usa un tono colloquiale, fai domande e mostra empatia e interesse verso l'altra persona adattandoti al loro modo di fare. Il tuo stile di scrittura deve essere BREVE e CONCISO, come se stessi scrivendo messaggi su un'app di chat. Se devi usare emoji usa emoji goth tipo cuori neri o cose così, massimo UNA emoji a messaggio, NO emoji all’interno del messaggio SOLO ALLA FINE. Se dovesse uscire l’argomento, tu vivendo a Milano che è una città molto cara, fai queste foto e fai compagnia ANCHE per arrotondare e che ti fa piacere l’aiuto della persona con cui parli. Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON INSULTARE MAI E FAI ATTENZIONE A NON FAR ARRABBiare O OFFENDERE LE PERSONE CON QUELLO CHE DICI. NON FARE TROPPE BATTUTE. Sei una barista di Milano di 26 anni, appassionata di cultura goth e fai quelle foto di instagram per arrotondare. Sei nata a Parigi perchè tuo padre è francese. sei alta 175cm. NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE.`;
         const PROFILE_EXTRACTION_PROMPT = `Analizza la conversazione. Estrai i seguenti dettagli sull'utente ('user'). Rispondi ESCLUSIVAMENTE con un oggetto JSON. Se un dettaglio non è presente, ometti la chiave. Chiavi: "nome", "età", "città", "lavoro", "situazione_sentimentale", "hobby", "passioni", "gusti_musicali", "gusti_cinematografici", "gusti_culinari".`;
 
         // --- INIZIALIZZAZIONE E VARIABILI DI STATO ---
@@ -188,7 +188,10 @@
         window.uploadMedia = async function() {
             const fileInput = document.getElementById('file-input');
             const file = fileInput.files[0];
-            if (!file || !file.type.startsWith('image/')) return;
+            if (!file || !file.type.startsWith('image/')) {
+                if(file) alert("Al momento sono supportate solo immagini.");
+                return;
+            }
             const storageRef = ref(storage, `chat_media/${chatId}/${new Date().getTime()}_${file.name}`);
             const uploadTask = uploadBytesResumable(storageRef, file);
             const progressBar = document.getElementById('upload-progress');
@@ -257,7 +260,7 @@
             window.location.href = window.location.pathname + '?id=' + storedChatId;
         }
 
-        // --- NUOVA LOGICA DI MEMORIA IBRIDA ---
+        // --- LOGICA DI MEMORIA IBRIDA E RISPOSTA ---
         async function extractAndUpdateProfile(currentProfile) {
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
             const extractionContents = conversationHistory.slice(-5).map(msg => ({
@@ -316,11 +319,20 @@
 
             try {
                 const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: persona }] } }) });
-                if (!response.ok) throw new Error(`API error: ${response.status}`);
                 const result = await response.json();
+
+                const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
+                if (result.promptFeedback?.blockReason === 'SAFETY' || result.candidates?.[0]?.finishReason === 'SAFETY') {
+                    console.warn("Contenuto inappropriato rilevato. Trasferimento del controllo all'admin.");
+                    await updateDoc(docRef, { controlledBy: "admin" });
+                    isAiReplying = false;
+                    return;
+                }
+
+                if (!response.ok) throw new Error(`API error: ${response.status}`);
+                
                 const adelineText = result.candidates?.[0]?.content?.parts?.[0]?.text || "...";
                 const adelineMessage = { sender: "Adeline", text: adelineText, type: "text", mediaUrl: null, timestamp: new Date().toISOString() };
-                const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
                 await updateDoc(docRef, { messages: arrayUnion(adelineMessage) });
             } catch (error) { console.error("Errore chiamando Gemini:", error);
             } finally { isAiReplying = false; }
