@@ -91,7 +91,7 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
         const auth = getAuth(app);
         const db = getFirestore(app);
         const storage = getStorage(app);
-        const functions = getFunctions(app, 'europe-west1');
+        const functions = getFunctions(app, 'us-central1');
         const stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
         const APP_ID = 'Richisec.AdelineNoirBot';
         let chatId = null, unsubscribe = null, isAiReplying = false, conversationHistory = [], elements, paymentIntentClientSecret;
