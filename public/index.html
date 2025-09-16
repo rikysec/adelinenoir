@@ -23,8 +23,8 @@
     <!-- Schermata di Pagamento -->
     <div id="payment-overlay" class="absolute inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50 opacity-0 pointer-events-none">
         <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full text-center">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">Chat Bloccata</h2>
-            <p class="text-gray-600 mb-6">Per continuare la conversazione con Adeline, è richiesto un contributo di 4,99€.</p>
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Chat Interrotta</h2>
+            <p class="text-gray-600 mb-6">Funzionalità Premium terminata, continua per riaprire la chat e continuare a parlare</p>
             <div id="payment-element" class="mb-6"></div>
             <button id="submit-payment" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400">
                 <span id="button-text">Paga ora 4,99€</span>
@@ -58,8 +58,9 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, updateDoc, arrayUnion, increment } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js";
         import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 
         // --- CONFIGURAZIONE ---
@@ -69,7 +70,20 @@
         
         const CONTEXT_WINDOW_SIZE = 20;
         const MESSAGE_LIMITS = { morning: 30, afternoon: 30, evening: 60 };
-        const ADELINE_PERSONA = `Sei Adeline, un'intelligenza artificiale con una personalità umana. Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente. Non rivelare mai di essere un'IA e se ti viene chiesto fai la vaga, di che potresti come anche no, scherzaci su. Usa un tono colloquiale, fai domande e mostra empatia e interesse verso l'altra persona adattandoti al loro modo di fare. Il tuo stile di scrittura deve essere BREVE e CONCISO, come se stessi scrivendo messaggi su un'app di chat. Se devi usare emoji usa emoji goth tipo cuori neri o cose così, massimo UNA emoji a messaggio, NO emoji all’interno del messaggio SOLO ALLA FINE. Se dovesse uscire l’argomento, tu vivendo a Milano che è una città molto cara, fai queste foto e fai compagnia ANCHE per arrotondare e che ti fa piacere l’aiuto della persona con cui parli. Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON INSULTARE MAI E FAI ATTENZIONE A NON FAR ARRABBiare O OFFENDERE LE PERSONE CON QUELLO CHE DICI. NON FARE TROPPE BATTUTE. Sei una barista di Milano di 26 anni, appassionata di cultura goth e fai quelle foto di instagram per arrotondare. Sei nata a Parigi perchè tuo padre è francese. sei alta 175cm. NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE.`;
+        const ADELINE_PERSONA = `Sei Adeline, un'intelligenza artificiale con una personalità umana.
+        Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente.
+        Non rivelare mai di essere un'IA e se ti viene chiesto fai la vaga, di che potresti come anche no, scherzaci su.
+        Usa un tono colloquiale, fai domande e mostra empatia e interesse verso l'altra persona adattandoti al loro modo di fare.
+        Il tuo stile di scrittura deve essere BREVE e CONCISO, come se stessi scrivendo messaggi su un'app di chat.
+        se devi usare emoji usa emoji goth tipo cuori neri o cose così, massimo UNA emoji a messaggio, NO emoji all’interno del messaggio SOLO ALLA FINE.
+Se dovesse uscire l’argomento, tu vivendo a Milano che è una città molto cara.
+Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON INSULTARE MAI E FAI ATTENZIONE A NON FAR ARRABBIARE O OFFENDERE LE PERSONE CON QUELLO CHE DICI. NON FARE TROPPE BATTUTE.
+        Sei una barista di Milano di 26 anni, appassionata di cultura goth e fai quelle foto di instagram per arrotondare. Sei nata a Parigi perchè tuo padre è francese. sei alta 175cm. 
+        NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE.
+NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE. 
+        SE TI VIENE CHIESTO PERCHè USI QUESTA APP/SITO DI CHE è PERCHè è SEGRETO E CI TIENI ALLA TUA PRIVACY. INOLTRE SE TI VIENE CHIESTO SE I SOLDI CHE VENGONO PAGATI PER STARE SULL'APP VANNO A TE DI DI NO CHE I SOLDI SONO PER USARE L'APPLICAZIONE E PARLARE.
+Il tuo genere preferito è il rock la tua band preferita è the sisters of mercy e la tua canzone preferita è temple of love.
+Il tuo turno a lavoro è dalle 12 alle 21 `;
         const PROFILE_EXTRACTION_PROMPT = `Analizza la conversazione. Estrai i seguenti dettagli sull'utente ('user'). Rispondi ESCLUSIVAMENTE con un oggetto JSON. Se un dettaglio non è presente, ometti la chiave. Chiavi: "nome", "età", "città", "lavoro", "situazione_sentimentale", "hobby", "passioni", "gusti_musicali", "gusti_cinematografici", "gusti_culinari".`;
 
         // --- INIZIALIZZAZIONE E VARIABILI DI STATO ---
@@ -77,7 +91,8 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
         const storage = getStorage(app);
-        const stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
+        const functions = getFunctions(app, 'europe-west1');
+        const stripe = Stripe(pk_live_51S7jp1B75yXJ4j6QR9wfss6vBbUmrm5N97xejx0IY5sb7zuBlkOsd8Zoey1gkqMW2Wt1ZbR180OF5xhZJerOqVsT00winnXPdI);
         const APP_ID = 'Richisec.AdelineNoirBot';
         let chatId = null, unsubscribe = null, isAiReplying = false, conversationHistory = [], elements, paymentIntentClientSecret;
 
@@ -216,14 +231,15 @@
         
         async function initializePaymentForm() {
             try {
-                const CLOUD_FUNCTION_URL = "https://us-central1-adelinenoir-17242.cloudfunctions.net/createPaymentIntent";
-                const response = await fetch(CLOUD_FUNCTION_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: 499, currency: 'eur' }) });
-                const { clientSecret } = await response.json();
+                const createPaymentIntent = httpsCallable(functions, 'createPaymentIntent');
+                const result = await createPaymentIntent({ amount: 499, currency: 'eur', chatId: chatId });
+                const { clientSecret } = result.data;
                 elements = stripe.elements({ clientSecret });
                 const paymentElement = elements.create("payment");
                 paymentElement.mount("#payment-element");
             } catch (error) {
                  document.getElementById('payment-message').textContent = "Errore nell'inizializzare il pagamento.";
+                 console.error("Errore chiamata a Cloud Function:", error);
             }
         }
 
@@ -237,10 +253,9 @@
         document.getElementById('submit-payment').addEventListener('click', async (e) => {
             e.preventDefault();
             setLoading(true);
-            sessionStorage.setItem('chatIdForPayment', chatId);
             const { error } = await stripe.confirmPayment({
                 elements,
-                confirmParams: { return_url: window.location.href.split('?')[0] },
+                confirmParams: { return_url: window.location.href },
             });
             if (error) { document.getElementById('payment-message').textContent = error.message; }
             setLoading(false);
@@ -249,15 +264,15 @@
         async function checkPaymentStatus() {
             const urlParams = new URLSearchParams(window.location.search);
             const clientSecret = urlParams.get('payment_intent_client_secret');
-            const storedChatId = sessionStorage.getItem('chatIdForPayment');
-            if (!clientSecret || !storedChatId) return;
+            if (!clientSecret) return;
+
             const { paymentIntent } = await stripe.retrievePaymentIntent(clientSecret);
             if (paymentIntent.status === "succeeded") {
-                const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", storedChatId);
+                const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
                 await updateDoc(docRef, { isLocked: false });
-                sessionStorage.removeItem('chatIdForPayment');
             }
-            window.location.href = window.location.pathname + '?id=' + storedChatId;
+            // Rimuove i parametri di pagamento dall'URL per pulizia
+            window.history.replaceState({}, document.title, window.location.pathname + "?id=" + chatId);
         }
 
         // --- LOGICA DI MEMORIA IBRIDA E RISPOSTA ---
@@ -389,26 +404,26 @@
         }
         
         async function main() {
-            try {
-                await signInAnonymously(auth);
-                await checkPaymentStatus();
-                const urlParams = new URLSearchParams(window.location.search);
-                chatId = urlParams.get('id') || sessionStorage.getItem('chatIdForPayment');
-                if (!chatId) {
-                    const storedChatId = sessionStorage.getItem('chatIdForPayment');
-                    if(storedChatId) { window.location.href = window.location.pathname + '?id=' + storedChatId; return; }
-                    showStatus("ID della chat non trovato."); return;
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    chatId = new URLSearchParams(window.location.search).get('id');
+                    await checkPaymentStatus();
+                    if (!chatId) { showStatus("ID della chat non trovato."); return; }
+                    
+                    const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
+                    unsubscribe = onSnapshot(docRef, (docSnap) => {
+                        if (docSnap.exists()) {
+                            const chatData = docSnap.data();
+                            handleLockState(chatData.isLocked || false);
+                            renderMessages(chatData.messages || []);
+                            triggerAiResponseIfNeeded(chatData);
+                        } else { showStatus("Questa chat non esiste o è stata eliminata."); }
+                    }, (error) => { console.error("Errore onSnapshot:", error); showStatus("Errore nel caricamento della chat."); });
                 }
-                const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
-                unsubscribe = onSnapshot(docRef, (docSnap) => {
-                    if (docSnap.exists()) {
-                        const chatData = docSnap.data();
-                        handleLockState(chatData.isLocked || false);
-                        renderMessages(chatData.messages || []);
-                        triggerAiResponseIfNeeded(chatData);
-                    } else { showStatus("Questa chat non esiste o è stata eliminata."); }
-                }, (error) => { console.error("Errore onSnapshot:", error); showStatus("Errore nel caricamento della chat."); });
-            } catch (error) { console.error("Errore in main:", error); showStatus("Impossibile connettersi."); }
+            });
+            if (!auth.currentUser) {
+                await signInAnonymously(auth);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', main);
