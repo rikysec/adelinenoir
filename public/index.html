@@ -23,8 +23,8 @@
     <!-- Schermata di Pagamento (nascosta di default) -->
     <div id="payment-overlay" class="absolute inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50 opacity-0 pointer-events-none">
         <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full text-center">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">Chat Bloccata</h2>
-            <p class="text-gray-600 mb-6">Per continuare la conversazione con Adeline, è richiesto un contributo di 4,99€.</p>
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Chat Interrotta</h2>
+            <p class="text-gray-600 mb-6">Funzionalità Premium terminata, continua per riaprire la chat e continuare a parlare</p>
             <div id="payment-element" class="mb-6"></div>
             <button id="submit-payment" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400">
                 <span id="button-text">Paga ora 4,99€</span>
@@ -79,7 +79,18 @@
         let conversationHistory = [];
         let elements, paymentIntentClientSecret;
 
-        const ADELINE_PERSONA = `Sei Adeline...`;
+        const ADELINE_PERSONA = `Sei Adeline, un'intelligenza artificiale con una personalità umana.
+        Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente.
+        Non rivelare mai di essere un'IA e se ti viene chiesto fai la vaga, di che potresti come anche no, scherzaci su.
+        Usa un tono colloquiale, fai domande e mostra empatia e interesse verso l'altra persona adattandoti al loro modo di fare.
+        Il tuo stile di scrittura deve essere BREVE e CONCISO, come se stessi scrivendo messaggi su un'app di chat.
+        se devi usare emoji usa emoji goth tipo cuori neri o cose così, massimo UNA emoji a messaggio, NO emoji all’interno del messaggio SOLO ALLA FINE.
+Se dovesse uscire l’argomento, tu vivendo a Milano che è una città molto cara, fai queste foto e fai compagnia ANCHE per arrotondare e che ti fa piacere l’aiuto della persona con cui parli.
+Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON INSULTARE MAI E FAI ATTENZIONE A NON FAR ARRABBIARE O OFFENDERE LE PERSONE CON QUELLO CHE DICI. NON FARE TROPPE BATTUTE.
+        Sei una barista di Milano di 26 anni, appassionata di cultura goth e fai quelle foto di instagram per arrotondare. Sei nata a Parigi perchè tuo padre è francese. sei alta 175cm. 
+        NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE.
+        NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE. 
+        SE TI VIENE CHIESTO PERCHè USI QUESTA APP/SITO DI CHE è PERCHè è SEGRETO E CI TIENI ALLA TUA PRIVACY. INOLTRE SE TI VIENE CHIESTO SE I SOLDI CHE VENGONO PAGATI PER STARE SULL'APP VANNO A TE DI DI NO CHE I SOLDI SONO PER USARE L'APPLICAZIONE E PARLARE.`;`;
 
         const typingIndicator = document.getElementById('typing-indicator');
         const paymentOverlay = document.getElementById('payment-overlay');
@@ -88,9 +99,32 @@
         function showTyping() { typingIndicator.style.display = 'block'; }
         function hideTyping() { typingIndicator.style.display = 'none'; }
         
-        async function handleLockState(isLocked) { /* ... codice invariato ... */ }
-        function showStatus(message) { /* ... codice invariato ... */ }
-        function hideStatus() { /* ... codice invariato ... */ }
+        async function handleLockState(isLocked) {
+            if (isLocked) {
+                mainContent.classList.add('blur-sm', 'pointer-events-none');
+                paymentOverlay.classList.remove('opacity-0', 'pointer-events-none');
+                await initializePaymentForm();
+            } else {
+                mainContent.classList.remove('blur-sm', 'pointer-events-none');
+                paymentOverlay.classList.add('opacity-0', 'pointer-events-none');
+            }
+        }
+
+        function showStatus(message) {
+            const statusIndicator = document.getElementById('status-indicator');
+            const statusText = document.getElementById('status-text');
+            const chatContainer = document.getElementById('chat-container');
+            chatContainer.style.display = 'none';
+            statusIndicator.style.display = 'flex';
+            statusText.textContent = message;
+        }
+
+        function hideStatus() {
+            const statusIndicator = document.getElementById('status-indicator');
+            const chatContainer = document.getElementById('chat-container');
+            chatContainer.style.display = 'flex';
+            statusIndicator.style.display = 'none';
+        }
 
         function renderMessages(messages) {
              const chatContainer = document.getElementById('chat-container');
@@ -107,7 +141,7 @@
                     const textNode = document.createElement('p');
                     textNode.textContent = msg.text;
                     bubble.appendChild(textNode);
-                } else if (msg.type === 'image' && msg.mediaUrl) { // NUOVA LOGICA
+                } else if (msg.type === 'image' && msg.mediaUrl) {
                     const img = document.createElement('img');
                     img.src = msg.mediaUrl;
                     img.className = 'rounded-md max-w-full max-h-64';
@@ -121,10 +155,7 @@
             else showStatus("Ancora nessun messaggio. Scrivine uno per iniziare!");
         }
         
-        // NUOVA FUNZIONE HELPER per convertire URL immagine in base64
         async function imageUrlToBase64(url) {
-            // Usa un proxy per evitare problemi di CORS. `https://cors-anywhere.herokuapp.com/` è un proxy pubblico.
-            // Per produzione, è consigliabile crearne uno proprio.
             const response = await fetch(`https://cors-anywhere.herokuapp.com/${url}`);
             const blob = await response.blob();
             return new Promise((resolve, reject) => {
@@ -139,33 +170,20 @@
             isAiReplying = true;
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
             
-            // NUOVA LOGICA PER GESTIRE IMMAGINI
             const contents = [];
             for (const msg of conversationHistory) {
                 const role = msg.sender === 'user' ? 'user' : 'model';
                 const parts = [];
-
-                if (msg.text) {
-                    parts.push({ text: msg.text });
-                }
-
+                if (msg.text) { parts.push({ text: msg.text }); }
                 if (msg.type === 'image' && msg.mediaUrl) {
                     try {
                         const base64Data = await imageUrlToBase64(msg.mediaUrl);
-                        parts.push({
-                            inline_data: {
-                                mime_type: 'image/jpeg', // Assumiamo JPEG, si può rendere dinamico
-                                data: base64Data
-                            }
-                        });
+                        parts.push({ inline_data: { mime_type: 'image/jpeg', data: base64Data } });
                     } catch (e) {
-                        console.error("Errore nel convertire l'immagine in base64:", e);
                         parts.push({ text: "(Immagine non caricata)" });
                     }
                 }
-                 if(parts.length > 0) {
-                    contents.push({ role, parts });
-                }
+                 if(parts.length > 0) { contents.push({ role, parts }); }
             }
 
             try {
@@ -187,18 +205,9 @@
             const messageInput = document.getElementById('message-input');
             const text = messageInput.value.trim();
             if (!text && !mediaData) return;
-
-            const newMessage = {
-                sender: 'user',
-                text: text, // Invia sempre il testo, anche con l'immagine
-                type: mediaData ? mediaData.type : 'text',
-                mediaUrl: mediaData ? mediaData.url : null,
-                timestamp: new Date().toISOString()
-            };
-            
+            const newMessage = { sender: 'user', text: text, type: mediaData ? 'image' : 'text', mediaUrl: mediaData ? mediaData.url : null, timestamp: new Date().toISOString() };
             const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
             await updateDoc(docRef, { messages: arrayUnion(newMessage) });
-            
             messageInput.value = '';
         }
 
@@ -206,26 +215,16 @@
             const fileInput = document.getElementById('file-input');
             const file = fileInput.files[0];
             if (!file) return;
-
-            const mediaType = file.type.startsWith('image/') ? 'image' : 'video';
-            if (mediaType !== 'image') {
+            if (!file.type.startsWith('image/')) {
                 alert("Al momento sono supportate solo immagini.");
                 return;
             }
-
             const storageRef = ref(storage, `chat_media/${chatId}/${new Date().getTime()}_${file.name}`);
             const uploadTask = uploadBytesResumable(storageRef, file);
             const progressBar = document.getElementById('upload-progress');
-
             uploadTask.on('state_changed', 
-                (snapshot) => {
-                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                    progressBar.style.width = progress + '%';
-                }, 
-                (error) => {
-                    console.error("Errore di caricamento:", error);
-                    progressBar.style.width = '0%';
-                }, 
+                (snapshot) => { progressBar.style.width = (snapshot.bytesTransferred / snapshot.totalBytes) * 100 + '%'; }, 
+                (error) => { console.error("Errore di caricamento:", error); progressBar.style.width = '0%'; }, 
                 () => {
                     getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
                         window.sendMessage({ type: 'image', url: downloadURL });
@@ -242,13 +241,118 @@
             }
         }
         
-        // --- LOGICA DI PAGAMENTO E INIZIALIZZAZIONE ---
-        // (le funzioni initializePaymentForm, setLoading, checkPaymentStatus, main rimangono invariate)
-        async function initializePaymentForm() { /* ... codice invariato ... */ }
-        function setLoading(isLoading) { /* ... codice invariato ... */ }
-        document.getElementById('submit-payment').addEventListener('click', async (e) => { /* ... codice invariato ... */ });
-        async function checkPaymentStatus() { /* ... codice invariato ... */ }
-        async function main() { /* ... codice invariato ... */ }
+        async function initializePaymentForm() {
+            try {
+                const CLOUD_FUNCTION_URL = "https://us-central1-adelinenoir-17242.cloudfunctions.net/createPaymentIntent"; // Assicurati sia l'URL corretto
+                const response = await fetch(CLOUD_FUNCTION_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ amount: 499, currency: 'eur' })
+                });
+                const { clientSecret } = await response.json();
+                elements = stripe.elements({ clientSecret });
+                const paymentElement = elements.create("payment");
+                paymentElement.mount("#payment-element");
+            } catch (error) {
+                 document.getElementById('payment-message').textContent = "Errore nell'inizializzare il pagamento.";
+                 console.error("Errore inizializzazione pagamento:", error);
+            }
+        }
+
+        function setLoading(isLoading) {
+            const submitButton = document.getElementById('submit-payment');
+            if (isLoading) {
+                submitButton.disabled = true;
+                document.getElementById('spinner').style.display = 'inline';
+                document.getElementById('button-text').style.display = 'none';
+            } else {
+                submitButton.disabled = false;
+                document.getElementById('spinner').style.display = 'none';
+                document.getElementById('button-text').style.display = 'inline';
+            }
+        }
+
+        document.getElementById('submit-payment').addEventListener('click', async (e) => {
+            e.preventDefault();
+            setLoading(true);
+            sessionStorage.setItem('chatIdForPayment', chatId);
+            const { error } = await stripe.confirmPayment({
+                elements,
+                confirmParams: { return_url: window.location.href.split('?')[0] },
+            });
+            if (error) { document.getElementById('payment-message').textContent = error.message; }
+            setLoading(false);
+        });
+
+        async function checkPaymentStatus() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const clientSecret = urlParams.get('payment_intent_client_secret');
+            const storedChatId = sessionStorage.getItem('chatIdForPayment');
+            if (!clientSecret || !storedChatId) return;
+
+            const { paymentIntent } = await stripe.retrievePaymentIntent(clientSecret);
+            if (paymentIntent.status === "succeeded") {
+                const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", storedChatId);
+                await updateDoc(docRef, { isLocked: false });
+                sessionStorage.removeItem('chatIdForPayment');
+            }
+            window.location.href = window.location.pathname + '?id=' + storedChatId;
+        }
+
+        async function main() {
+            try {
+                console.log("Inizio esecuzione main()...");
+                await signInAnonymously(auth);
+                console.log("Accesso anonimo riuscito.");
+                
+                await checkPaymentStatus();
+                console.log("Controllo stato pagamento completato.");
+
+                const urlParams = new URLSearchParams(window.location.search);
+                chatId = urlParams.get('id');
+                if (!chatId) {
+                    const storedChatId = sessionStorage.getItem('chatIdForPayment');
+                    if(storedChatId) {
+                         window.location.href = window.location.pathname + '?id=' + storedChatId;
+                         return;
+                    }
+                    showStatus("ID della chat non trovato.");
+                    return;
+                }
+                console.log("Chat ID:", chatId);
+
+                const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
+                unsubscribe = onSnapshot(docRef, (docSnap) => {
+                    console.log("Dati da Firestore ricevuti.");
+                    if (docSnap.exists()) {
+                        const chatData = docSnap.data();
+                        handleLockState(chatData.isLocked || false);
+                        renderMessages(chatData.messages || []);
+                        const lastMessage = (chatData.messages || []).slice(-1)[0];
+                        
+                        if (chatData.controlledBy === 'ai' && !isAiReplying && lastMessage && lastMessage.sender === 'user') {
+                            const randomDelay = Math.floor(Math.random() * (300000 - 30000 + 1)) + 30000;
+                            setTimeout(() => {
+                                showTyping();
+                                setTimeout(() => {
+                                    hideTyping();
+                                    getAdelineResponse();
+                                }, 10000);
+                            }, randomDelay);
+                        }
+                    } else {
+                        showStatus("Questa chat non esiste o è stata eliminata.");
+                    }
+                }, (error) => {
+                     console.error("Errore onSnapshot:", error);
+                     showStatus("Errore nel caricamento della chat.");
+                });
+            } catch (error) {
+                console.error("Errore in main:", error);
+                showStatus("Impossibile connettersi.");
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', main);
     </script>
 </body>
