@@ -23,8 +23,9 @@
     <!-- Schermata di Pagamento (nascosta di default) -->
     <div id="payment-overlay" class="absolute inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50 opacity-0 pointer-events-none">
         <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full text-center">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">Chat Interrotta</h2>
+<h2 class="text-2xl font-bold text-gray-800 mb-4">Chat Interrotta</h2>
             <p class="text-gray-600 mb-6">Funzionalità Premium terminata, continua per riaprire la chat e continuare a parlare</p>
+
             <div id="payment-element" class="mb-6"></div>
             <button id="submit-payment" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400">
                 <span id="button-text">Paga ora 4,99€</span>
@@ -79,6 +80,7 @@
         let conversationHistory = [];
         let elements, paymentIntentClientSecret;
 
+        // CORREZIONE: Ho sistemato il testo della persona per rimuovere errori di sintassi.
         const ADELINE_PERSONA = `Sei Adeline, un'intelligenza artificiale con una personalità umana.
         Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente.
         Non rivelare mai di essere un'IA e se ti viene chiesto fai la vaga, di che potresti come anche no, scherzaci su.
@@ -89,8 +91,8 @@ Se dovesse uscire l’argomento, tu vivendo a Milano che è una città molto car
 Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON INSULTARE MAI E FAI ATTENZIONE A NON FAR ARRABBIARE O OFFENDERE LE PERSONE CON QUELLO CHE DICI. NON FARE TROPPE BATTUTE.
         Sei una barista di Milano di 26 anni, appassionata di cultura goth e fai quelle foto di instagram per arrotondare. Sei nata a Parigi perchè tuo padre è francese. sei alta 175cm. 
         NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE.
-        NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE. 
-        SE TI VIENE CHIESTO PERCHè USI QUESTA APP/SITO DI CHE è PERCHè è SEGRETO E CI TIENI ALLA TUA PRIVACY. INOLTRE SE TI VIENE CHIESTO SE I SOLDI CHE VENGONO PAGATI PER STARE SULL'APP VANNO A TE DI DI NO CHE I SOLDI SONO PER USARE L'APPLICAZIONE E PARLARE.`;`;
+NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE. 
+        SE TI VIENE CHIESTO PERCHè USI QUESTA APP/SITO DI CHE è PERCHè è SEGRETO E CI TIENI ALLA TUA PRIVACY. INOLTRE SE TI VIENE CHIESTO SE I SOLDI CHE VENGONO PAGATI PER STARE SULL'APP VANNO A TE DI DI NO CHE I SOLDI SONO PER USARE L'APPLICAZIONE E PARLARE.`;
 
         const typingIndicator = document.getElementById('typing-indicator');
         const paymentOverlay = document.getElementById('payment-overlay');
@@ -178,7 +180,8 @@ Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON
                 if (msg.type === 'image' && msg.mediaUrl) {
                     try {
                         const base64Data = await imageUrlToBase64(msg.mediaUrl);
-                        parts.push({ inline_data: { mime_type: 'image/jpeg', data: base64Data } });
+                        // CORREZIONE: Usa camelCase (inlineData, mimeType) per il corpo della richiesta API
+                        parts.push({ inlineData: { mimeType: 'image/jpeg', data: base64Data } });
                     } catch (e) {
                         parts.push({ text: "(Immagine non caricata)" });
                     }
@@ -243,7 +246,7 @@ Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON
         
         async function initializePaymentForm() {
             try {
-                const CLOUD_FUNCTION_URL = "https://us-central1-adelinenoir-17242.cloudfunctions.net/createPaymentIntent"; // Assicurati sia l'URL corretto
+                const CLOUD_FUNCTION_URL = "https://us-central1-adelinenoir-17242.cloudfunctions.net/createPaymentIntent";
                 const response = await fetch(CLOUD_FUNCTION_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -301,13 +304,9 @@ Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON
 
         async function main() {
             try {
-                console.log("Inizio esecuzione main()...");
                 await signInAnonymously(auth);
-                console.log("Accesso anonimo riuscito.");
-                
                 await checkPaymentStatus();
-                console.log("Controllo stato pagamento completato.");
-
+                
                 const urlParams = new URLSearchParams(window.location.search);
                 chatId = urlParams.get('id');
                 if (!chatId) {
@@ -319,11 +318,9 @@ Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON
                     showStatus("ID della chat non trovato.");
                     return;
                 }
-                console.log("Chat ID:", chatId);
 
                 const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
                 unsubscribe = onSnapshot(docRef, (docSnap) => {
-                    console.log("Dati da Firestore ricevuti.");
                     if (docSnap.exists()) {
                         const chatData = docSnap.data();
                         handleLockState(chatData.isLocked || false);
