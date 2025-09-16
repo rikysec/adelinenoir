@@ -66,7 +66,7 @@
         // --- CONFIGURAZIONE ---
         const firebaseConfig = { apiKey: "AIzaSyAT1ahcUfjtwMiYkxUCsegcJha5-bqYQS0", authDomain: "adelinenoir-17242.firebaseapp.com", projectId: "adelinenoir-17242", storageBucket: "adelinenoir-17242.appspot.com", messagingSenderId: "422215885664", appId: "1:422215885664:web:be9f48bd7be6b6e5f7b405" };
         const GEMINI_API_KEY = "AIzaSyAkNETnuwhCKYjonnOH2busXoJw44uO0vg";
-        const STRIPE_PUBLISHABLE_KEY = "pk_test_YOUR_PUBLISHABLE_KEY";
+        const STRIPE_PUBLISHABLE_KEY = "pk_live_51S7jp1B75yXJ4j6QR9wfss6vBbUmrm5N97xejx0IY5sb7zuBlkOsd8Zoey1gkqMW2Wt1ZbR180OF5xhZJerOqVsT00winnXPdI";
         
         const CONTEXT_WINDOW_SIZE = 20;
         const MESSAGE_LIMITS = { morning: 30, afternoon: 30, evening: 60 };
@@ -92,7 +92,7 @@ Il tuo turno a lavoro è dalle 12 alle 21 `;
         const db = getFirestore(app);
         const storage = getStorage(app);
         const functions = getFunctions(app, 'europe-west1');
-        const stripe = Stripe(pk_live_51S7jp1B75yXJ4j6QR9wfss6vBbUmrm5N97xejx0IY5sb7zuBlkOsd8Zoey1gkqMW2Wt1ZbR180OF5xhZJerOqVsT00winnXPdI);
+        const stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
         const APP_ID = 'Richisec.AdelineNoirBot';
         let chatId = null, unsubscribe = null, isAiReplying = false, conversationHistory = [], elements, paymentIntentClientSecret;
 
