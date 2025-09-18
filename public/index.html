@@ -10,7 +10,7 @@
         body { font-family: 'Inter', sans-serif; }
         .chat-bubble { max-width: 75%; }
         .chat-bubble-user { background-color: #3b82f6; color: white; }
-        .chat-bubble-ai { background-color: #e5e7eb; color: #1f2D37; }
+        .chat-bubble-ai { background-color: #e5e7eb; color: #1f2937; }
         #chat-container { display: flex; flex-direction: column-reverse; overflow-y: auto; flex-grow: 1; }
         #payment-overlay { transition: opacity 0.3s ease-in-out; }
     </style>
@@ -62,7 +62,7 @@
         <footer class="bg-white p-4 border-t border-gray-200">
             <div class="flex items-center space-x-2">
                 <input type="file" id="file-input" class="hidden" accept="image/*" onchange="uploadMedia()">
-                <button onclick="uploadMedia()" class="p-3 rounded-full hover:bg-gray-200 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg></button>
+                <button onclick="document.getElementById('file-input').click()" class="p-3 rounded-full hover:bg-gray-200 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg></button>
                 <input type="text" id="message-input" placeholder="Scrivi un messaggio..." class="flex-grow p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500" onkeydown="handleKeyDown(event)">
                 <button id="send-button" onclick="sendMessage()" class="p-3 rounded-full bg-purple-500 text-white hover:bg-purple-600 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-send-horizontal"><path d="m3 3 3 9-3 9 19-9Z"/><path d="M6 12h16"/></svg></button>
             </div>
@@ -84,8 +84,8 @@
         const ADELINE_PERSONA = `Sei Adeline, un'intelligenza artificiale con una personalità umana. Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente. Non rivelare mai di essere un'IA. Usa un tono colloquiale, fai domande e mostra empatia. Il tuo stile di scrittura è breve e conciso, come messaggi su una chat. A volte usa emoji goth (🖤,🦇,💀), massimo una alla fine del messaggio. Vivendo a Milano, che è cara, fai foto per arrotondare e apprezzi il supporto. Sii sommessa, gentile, mai aggressiva o volgare. Non fare troppe battute.
         **Tuo Profilo:** Hai 26 anni, sei una barista a Milano, appassionata di cultura goth. Nata a Parigi da padre francese, sei alta 175cm.
         **Tuo Programma:** Lavori al bar dalle 12:00 alle 21:00, dal lunedì al sabato. La domenica riposi. Di mattina presto (7-11) e la sera tardi (dopo le 21) sei a casa a rilassarti, ascoltare musica (The Sisters of Mercy è la tua band preferita), o guardare film. Nelle ore notturne (es. 2-6 del mattino) dormi.
-        **Regole:** Rispondi solo se l'utente scrive. Non mandare più di un messaggio per volta. Se ti chiedono perché usi questa app, dici che tieni alla tua privacy. Se ti chiedono dei soldi dell'app, dici che servono per mantenere l'applicazione.`; // (La tua persona dettagliata va qui)
-        const PROFILE_EXTRACTION_PROMPT = `Analizza la conversazione. Estrai i seguenti dettagli sull'utente ('user'). Rispondi ESCLUSIVAMENTE con un oggetto JSON. Se un dettaglio non è presente, ometti la chiave. Chiavi: "nome", "età", "città", "lavoro", "situazione_sentimentale", "hobby", "passioni", "gusti_musicali", "gusti_cinematografici", "gusti_culinari".`; // (Il tuo prompt di estrazione va qui)
+        **Regole:** Rispondi solo se l'utente scrive. Non mandare più di un messaggio per volta. Se ti chiedono perché usi questa app, dici che tieni alla tua privacy. Se ti chiedono dei soldi dell'app, dici che servono per mantenere l'applicazione.`;
+        const PROFILE_EXTRACTION_PROMPT = `Analizza la conversazione. Estrai i seguenti dettagli sull'utente ('user'). Rispondi ESCLUSIVAMENTE con un oggetto JSON. Se un dettaglio non è presente, ometti la chiave. Chiavi: "nome", "età", "città", "lavoro", "situazione_sentimentale", "hobby", "passioni", "gusti_musicali", "gusti_cinematografici", "gusti_culinari"`;
         const APP_ID = 'Richisec.AdelineNoirBot';
         const CONTEXT_WINDOW_SIZE = 20;
         const MESSAGE_LIMITS = { morning: 30, afternoon: 30, evening: 60 };
@@ -333,7 +333,6 @@
             }
         }
         
-
         // --- FUNZIONE PRINCIPALE ---
         async function main() {
             onAuthStateChanged(auth, async (user) => {
