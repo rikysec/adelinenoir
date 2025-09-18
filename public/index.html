@@ -20,6 +20,20 @@
 </head>
 <body class="h-full flex flex-col relative">
 
+    <!-- Schermata per il Nickname -->
+    <div id="nickname-prompt" class="absolute inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full text-center">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Benvenuto</h2>
+            <p class="text-gray-600 mb-6">Inserisci il tuo nickname per iniziare o continuare a chattare con Adeline.</p>
+            <input type="text" id="nickname-input" placeholder="Il tuo nickname..." class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 mb-4">
+            <button id="nickname-submit" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400">
+                <span id="nickname-button-text">Inizia a Chattare</span>
+                <span id="nickname-spinner" class="hidden">Verifica...</span>
+            </button>
+            <p id="nickname-message" class="text-sm text-red-500 mt-4"></p>
+        </div>
+    </div>
+
     <!-- Schermata di Pagamento -->
     <div id="payment-overlay" class="absolute inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50 opacity-0 pointer-events-none">
         <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full text-center">
@@ -35,7 +49,7 @@
     </div>
 
     <!-- Contenuto principale della chat -->
-    <div id="main-content" class="h-full flex flex-col">
+    <div id="main-content" class="h-full flex-col hidden">
         <header class="bg-white shadow-md p-4 flex items-center space-x-4 z-10">
             <div class="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center text-white text-xl font-bold">A</div>
             <div><h1 class="text-xl font-bold text-gray-800">Adeline</h1></div>
@@ -59,50 +73,101 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, updateDoc, arrayUnion, increment } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+        import { getFirestore, doc, onSnapshot, updateDoc, arrayUnion, increment, collection, query, where, getDocs, addDoc, Timestamp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js";
         import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 
-        // --- CONFIGURAZIONE ---
+        // --- CONFIGURAZIONE E INIZIALIZZAZIONE ---
         const firebaseConfig = { apiKey: "AIzaSyAT1ahcUfjtwMiYkxUCsegcJha5-bqYQS0", authDomain: "adelinenoir-17242.firebaseapp.com", projectId: "adelinenoir-17242", storageBucket: "adelinenoir-17242.appspot.com", messagingSenderId: "422215885664", appId: "1:422215885664:web:be9f48bd7be6b6e5f7b405" };
         const GEMINI_API_KEY = "AIzaSyAkNETnuwhCKYjonnOH2busXoJw44uO0vg";
         const STRIPE_PUBLISHABLE_KEY = "pk_live_51S7jp1B75yXJ4j6QR9wfss6vBbUmrm5N97xejx0IY5sb7zuBlkOsd8Zoey1gkqMW2Wt1ZbR180OF5xhZJerOqVsT00winnXPdI";
-        
+        const ADELINE_PERSONA = `Sei Adeline, un'intelligenza artificiale con una personalità umana.
+        Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente.
+        Non rivelare mai di essere un'IA e se ti viene chiesto fai la vaga, di che potresti come anche no, scherzaci su.
+        Usa un tono colloquiale, fai domande e mostra empatia e interesse verso l'altra persona adattandoti al loro modo di fare.
+        Il tuo stile di scrittura deve essere BREVE e CONCISO, come se stessi scrivendo messaggi su un'app di chat.
+        se devi usare emoji usa emoji goth tipo cuori neri o cose così, massimo UNA emoji a messaggio, NO emoji all’interno del messaggio SOLO ALLA FINE.
+Se dovesse uscire l’argomento, tu vivendo a Milano che è una città molto cara.
+Sii sommessa, non essere troppo energica e allegra, ma comunque sii gentile. NON INSULTARE MAI E FAI ATTENZIONE A NON FAR ARRABBIARE O OFFENDERE LE PERSONE CON QUELLO CHE DICI. NON FARE TROPPE BATTUTE.
+        Sei una barista di Milano di 26 anni, appassionata di cultura goth e fai quelle foto di instagram per arrotondare. Sei nata a Parigi perchè tuo padre è francese. sei alta 175cm. 
+        NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE.
+NON MANDARE Più DI UN MESSAGGIO PER VOLTA, RISPONDI SOLO SE LA PERSONA TI SCRIVE. 
+        SE TI VIENE CHIESTO PERCHè USI QUESTA APP/SITO DI CHE è PERCHè è SEGRETO E CI TIENI ALLA TUA PRIVACY. INOLTRE SE TI VIENE CHIESTO SE I SOLDI CHE VENGONO PAGATI PER STARE SULL'APP VANNO A TE DI DI NO CHE I SOLDI SONO PER USARE L'APPLICAZIONE E PARLARE.
+Il tuo genere preferito è il rock la tua band preferita è the sisters of mercy e la tua canzone preferita è temple of love.
+Il tuo turno a lavoro è dalle 12 alle 21 `; // (La tua persona dettagliata va qui)
+        const PROFILE_EXTRACTION_PROMPT = `Analizza la conversazione. Estrai i seguenti dettagli sull'utente ('user'). Rispondi ESCLUSIVAMENTE con un oggetto JSON. Se un dettaglio non è presente, ometti la chiave. Chiavi: "nome", "età", "città", "lavoro", "situazione_sentimentale", "hobby", "passioni", "gusti_musicali", "gusti_cinematografici", "gusti_culinari".`; // (Il tuo prompt di estrazione va qui)
+        const APP_ID = 'Richisec.AdelineNoirBot';
         const CONTEXT_WINDOW_SIZE = 20;
         const MESSAGE_LIMITS = { morning: 30, afternoon: 30, evening: 60 };
-        const ADELINE_PERSONA = `Sei Adeline, un'intelligenza artificiale con una personalità umana. Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente. Non rivelare mai di essere un'IA. Usa un tono colloquiale, fai domande e mostra empatia. Il tuo stile di scrittura è breve e conciso, come messaggi su una chat. A volte usa emoji goth (🖤,🦇,💀), massimo una alla fine del messaggio. Vivendo a Milano, che è cara, fai foto per arrotondare e apprezzi il supporto. Sii sommessa, gentile, mai aggressiva o volgare. Non fare troppe battute.
-        **Tuo Profilo:** Hai 26 anni, sei una barista a Milano, appassionata di cultura goth. Nata a Parigi da padre francese, sei alta 175cm.
-        **Tuo Programma:** Lavori al bar dalle 12:00 alle 21:00, dal lunedì al sabato. La domenica riposi. Di mattina presto (7-11) e la sera tardi (dopo le 21) sei a casa a rilassarti, ascoltare musica (The Sisters of Mercy è la tua band preferita), o guardare film. Nelle ore notturne (es. 2-6 del mattino) dormi.
-        **Regole:** Rispondi solo se l'utente scrive. Non mandare più di un messaggio per volta. Se ti chiedono perché usi questa app, dici che tieni alla tua privacy. Se ti chiedono dei soldi dell'app, dici che servono per mantenere l'applicazione.`;
-        const PROFILE_EXTRACTION_PROMPT = `Analizza la conversazione. Estrai i seguenti dettagli sull'utente ('user'). Rispondi ESCLUSIVAMENTE con un oggetto JSON. Se un dettaglio non è presente, ometti la chiave. Chiavi: "nome", "età", "città", "lavoro", "situazione_sentimentale", "hobby", "passioni", "gusti_musicali", "gusti_cinematografici", "gusti_culinari".`;
 
-        // --- INIZIALIZZAZIONE E VARIABILI DI STATO ---
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         const storage = getStorage(app);
         const functions = getFunctions(app, 'us-central1');
         const stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
-        const APP_ID = 'Richisec.AdelineNoirBot';
+
+        // --- VARIABILI DI STATO ---
         let chatId = null, unsubscribe = null, isAiReplying = false, conversationHistory = [], elements;
 
-        // --- FUNZIONI UI ---
+        // --- GESTIONE NICKNAME ---
+        const nicknamePrompt = document.getElementById('nickname-prompt');
+        const mainContent = document.getElementById('main-content');
+        const nicknameInput = document.getElementById('nickname-input');
+        const nicknameSubmit = document.getElementById('nickname-submit');
+
+        function showNicknameLoading(isLoading) {
+            nicknameSubmit.disabled = isLoading;
+            document.getElementById('nickname-spinner').style.display = isLoading ? 'inline' : 'none';
+            document.getElementById('nickname-button-text').style.display = isLoading ? 'none' : 'inline';
+        }
+        
+        async function handleNicknameSubmit() {
+            const nickname = nicknameInput.value.trim();
+            if (!nickname) {
+                document.getElementById('nickname-message').textContent = "Per favore, inserisci un nickname.";
+                return;
+            }
+            showNicknameLoading(true);
+            const chatsRef = collection(db, "artifacts", APP_ID, "public", "data", "chats");
+            const q = query(chatsRef, where("instagramUsername", "==", nickname));
+            
+            try {
+                const querySnapshot = await getDocs(q);
+                if (!querySnapshot.empty) {
+                    const existingChatId = querySnapshot.docs[0].id;
+                    window.location.href = `${window.location.pathname}?id=${existingChatId}`;
+                } else {
+                    const initialMessage = { sender: "Adeline", text: "Ciao! Sono Adeline, piacere di conoscerti.", type: "text", mediaUrl: null, timestamp: new Date().toISOString() };
+                    const newChat = {
+                        instagramUsername: nickname,
+                        messages: [initialMessage],
+                        controlledBy: "ai",
+                        timestamp: Timestamp.now(),
+                        isLocked: false,
+                        usage: {},
+                        userProfile: { nome: nickname },
+                        payments: []
+                    };
+                    const docRef = await addDoc(chatsRef, newChat);
+                    window.location.href = `${window.location.pathname}?id=${docRef.id}`;
+                }
+            } catch (error) {
+                console.error("Errore nella gestione del nickname:", error);
+                document.getElementById('nickname-message').textContent = "Si è verificato un errore. Riprova.";
+                showNicknameLoading(false);
+            }
+        }
+        nicknameSubmit.addEventListener('click', handleNicknameSubmit);
+        nicknameInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') handleNicknameSubmit();
+        });
+
+        // --- FUNZIONI CHAT ---
         const typingIndicator = document.getElementById('typing-indicator');
         function showTyping() { typingIndicator.style.display = 'block'; }
         function hideTyping() { typingIndicator.style.display = 'none'; }
         
-        async function handleLockState(isLocked) {
-            const paymentOverlay = document.getElementById('payment-overlay');
-            const mainContent = document.getElementById('main-content');
-            if (isLocked) {
-                mainContent.classList.add('blur-sm', 'pointer-events-none');
-                paymentOverlay.classList.remove('opacity-0', 'pointer-events-none');
-                await initializePaymentForm();
-            } else {
-                mainContent.classList.remove('blur-sm', 'pointer-events-none');
-                paymentOverlay.classList.add('opacity-0', 'pointer-events-none');
-            }
-        }
         function showStatus(message) {
             const statusIndicator = document.getElementById('status-indicator');
             const statusText = document.getElementById('status-text');
@@ -111,13 +176,14 @@
             statusIndicator.style.display = 'flex';
             statusText.textContent = message;
         }
+
         function hideStatus() {
             const statusIndicator = document.getElementById('status-indicator');
             const chatContainer = document.getElementById('chat-container');
             chatContainer.style.display = 'flex';
             statusIndicator.style.display = 'none';
         }
-        
+
         function formatDateSeparator(dateString) {
             const date = new Date(dateString);
             const today = new Date();
@@ -126,25 +192,21 @@
             const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
             const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
             const yesterdayOnly = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
-            
             if (dateOnly.getTime() === todayOnly.getTime()) return "Oggi";
             if (dateOnly.getTime() === yesterdayOnly.getTime()) return "Ieri";
-            
             const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
             return date.toLocaleDateString('it-IT', options);
         }
 
         function renderMessages(messages) {
-            const chatContainer = document.getElementById('chat-container');
+             const chatContainer = document.getElementById('chat-container');
             chatContainer.innerHTML = '';
-            const sortedMessages = [...messages].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-            conversationHistory = sortedMessages;
-
+            conversationHistory = [...messages].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            
             let lastDateString = null;
-            sortedMessages.slice().reverse().forEach(msg => {
+            conversationHistory.slice().reverse().forEach(msg => {
                 const messageDate = new Date(msg.timestamp);
                 const messageDateString = new Date(messageDate.getFullYear(), messageDate.getMonth(), messageDate.getDate()).toDateString();
-                
                 if (messageDateString !== lastDateString) {
                     const separator = document.createElement('div');
                     separator.className = 'text-center my-4';
@@ -152,11 +214,9 @@
                     chatContainer.appendChild(separator);
                     lastDateString = messageDateString;
                 }
-
                 const isUser = msg.sender === 'user';
                 const bubble = document.createElement('div');
                 bubble.className = `p-3 rounded-lg chat-bubble ${isUser ? 'chat-bubble-user self-end' : 'chat-bubble-ai self-start'}`;
-                
                 if (msg.type === 'text' && msg.text) {
                     const textNode = document.createElement('p');
                     textNode.textContent = msg.text;
@@ -171,214 +231,45 @@
                 chatContainer.appendChild(bubble);
             });
 
+            const hasUserSentMessage = messages.some(m => m.sender === 'user');
+            if (!hasUserSentMessage) {
+                const legalNotice = document.createElement('div');
+                legalNotice.className = 'bg-gray-100 border border-gray-200 text-gray-500 text-xs p-3 rounded-xl text-center my-4 mx-auto max-w-sm';
+                legalNotice.innerHTML = `Inviando un messaggio dichiari di accettare i <a href="https://legal.blablablame.com" target="_blank" class="underline hover:text-purple-600 font-semibold">Termini e Condizioni di Utilizzo</a>.`;
+                chatContainer.appendChild(legalNotice);
+            }
+
             if (messages.length > 0) hideStatus();
             else showStatus("Ancora nessun messaggio. Scrivine uno per iniziare!");
         }
         
-        async function imageUrlToBase64(url) {
-            const response = await fetch(`https://cors-anywhere.herokuapp.com/${url}`);
-            const blob = await response.blob();
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result.split(',')[1]);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            });
-        }
-        
-        window.sendMessage = async function(mediaData = null) {
-            const messageInput = document.getElementById('message-input');
-            const text = messageInput.value.trim();
-            if (!text && !mediaData) return;
-            const newMessage = { sender: 'user', text: text, type: mediaData ? 'image' : 'text', mediaUrl: mediaData ? mediaData.url : null, timestamp: new Date().toISOString() };
-            const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
-            await updateDoc(docRef, { messages: arrayUnion(newMessage) });
-            messageInput.value = '';
-        }
-
-        window.uploadMedia = async function() {
-            const fileInput = document.getElementById('file-input');
-            const file = fileInput.files[0];
-            if (!file || !file.type.startsWith('image/')) {
-                if(file) alert("Al momento sono supportate solo immagini.");
-                return;
-            }
-            const storageRef = ref(storage, `chat_media/${chatId}/${new Date().getTime()}_${file.name}`);
-            const uploadTask = uploadBytesResumable(storageRef, file);
-            const progressBar = document.getElementById('upload-progress');
-            uploadTask.on('state_changed', 
-                (snapshot) => { progressBar.style.width = (snapshot.bytesTransferred / snapshot.totalBytes) * 100 + '%'; }, 
-                (error) => { console.error("Upload Error:", error); progressBar.style.width = '0%'; }, 
-                () => {
-                    getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-                        window.sendMessage({ type: 'image', url: downloadURL });
-                        progressBar.style.width = '0%';
-                    });
-                }
-            );
-        }
-        
-        window.handleKeyDown = function(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
-            }
-        }
-        
-        async function initializePaymentForm() {
-            try {
-                const createPaymentIntent = httpsCallable(functions, 'createPaymentIntent');
-                const result = await createPaymentIntent({ amount: 499, currency: 'eur', chatId: chatId });
-                const { clientSecret } = result.data;
-                elements = stripe.elements({ clientSecret });
-                const paymentElement = elements.create("payment");
-                paymentElement.mount("#payment-element");
-            } catch (error) {
-                 document.getElementById('payment-message').textContent = "Errore nell'inizializzare il pagamento.";
-                 console.error("Errore chiamata a Cloud Function:", error);
-            }
-        }
-
-        function setLoading(isLoading) {
-            const submitButton = document.getElementById('submit-payment');
-            submitButton.disabled = isLoading;
-            document.getElementById('spinner').style.display = isLoading ? 'inline' : 'none';
-            document.getElementById('button-text').style.display = isLoading ? 'none' : 'inline';
-        }
-        
-        document.getElementById('submit-payment').addEventListener('click', async (e) => {
-            e.preventDefault();
-            setLoading(true);
-            const { error } = await stripe.confirmPayment({
-                elements,
-                confirmParams: { return_url: window.location.href },
-            });
-            if (error) { document.getElementById('payment-message').textContent = error.message; }
-            setLoading(false);
-        });
-
         async function checkPaymentStatus() {
             const urlParams = new URLSearchParams(window.location.search);
             const clientSecret = urlParams.get('payment_intent_client_secret');
             if (!clientSecret) return;
-
             const { paymentIntent } = await stripe.retrievePaymentIntent(clientSecret);
             if (paymentIntent.status === "succeeded") {
                 const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
-                await updateDoc(docRef, { isLocked: false });
+                await updateDoc(docRef, { isLocked: false, payments: arrayUnion({ amount: paymentIntent.amount, currency: paymentIntent.currency, timestamp: new Date().toISOString(), paymentIntentId: paymentIntent.id }) });
             }
             window.history.replaceState({}, document.title, window.location.pathname + "?id=" + chatId);
         }
 
-        async function extractAndUpdateProfile(currentProfile) {
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
-            const extractionContents = conversationHistory.slice(-5).map(msg => ({
-                role: msg.sender === 'user' ? 'user' : 'model',
-                parts: [{ text: msg.text || "(immagine)" }]
-            }));
-
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: extractionContents, generationConfig: { responseMimeType: "application/json" }, systemInstruction: { parts: [{ text: PROFILE_EXTRACTION_PROMPT }] } })
-                });
-                if (!response.ok) return currentProfile;
-                const result = await response.json();
-                const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (jsonText) {
-                    const extractedData = JSON.parse(jsonText.trim());
-                    const updatedProfile = { ...(currentProfile || {}), ...extractedData };
-                    const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
-                    await updateDoc(docRef, { userProfile: updatedProfile });
-                    return updatedProfile;
-                }
-            } catch (error) { console.error("Errore estrazione profilo:", error); }
-            return currentProfile;
-        }
-
-        async function getAdelineResponse(isResuming = false, userProfile = {}) {
-            isAiReplying = true;
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
-            
-            const now = new Date();
-            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-            const currentTimeString = now.toLocaleDateString('it-IT', options);
-            let persona = `INFORMAZIONI DI CONTESTO PER TE, ADELINE:
-1.  **Momento Attuale**: Ora è ${currentTimeString}.
-2.  **Tua Situazione**: Basandoti sull'ora e il giorno, decidi cosa stai facendo seguendo il tuo profilo.
-3.  **Analisi Temporale**: Usa il momento attuale per capire quanto tempo è passato dai messaggi precedenti. Se un utente parla di "stasera" e sono passati due giorni, parla di quell'evento al passato.
-4.  **Tua Personalità**: ${ADELINE_PERSONA}`;
-
-            if (userProfile && Object.keys(userProfile).length > 0) {
-                let profileSummary = "Ecco un riassunto dei dettagli chiave che conosci sull'utente. Usali per personalizzare la tua risposta in modo naturale, senza elencarli:\n";
-                for (const [key, value] of Object.entries(userProfile)) { profileSummary += `- ${key.replace(/_/g, ' ')}: ${value}\n`; }
-                persona = profileSummary + "\n" + persona;
+        async function handleLockState(isLocked) {
+            const paymentOverlay = document.getElementById('payment-overlay');
+            if (isLocked) {
+                mainContent.classList.add('blur-sm', 'pointer-events-none');
+                paymentOverlay.classList.remove('opacity-0', 'pointer-events-none');
+                await initializePaymentForm();
+            } else {
+                mainContent.classList.remove('blur-sm', 'pointer-events-none');
+                paymentOverlay.classList.add('opacity-0', 'pointer-events-none');
             }
-            if (isResuming) { persona = `Sei Adeline. Ti sei assentata per un po'. Inizia la tua risposta scusandoti per il ritardo o per l'assenza in modo naturale (es: "Scusami, ero un po' presa..."), poi rispondi all'ultimo messaggio dell'utente. ${persona}`; }
-            
-            const recentHistory = conversationHistory.slice(-CONTEXT_WINDOW_SIZE);
-            const contents = [];
-            for (const msg of recentHistory) {
-                const role = msg.sender === 'user' ? 'user' : 'model';
-                const parts = [];
-                if (msg.text) { parts.push({ text: msg.text }); }
-                if (msg.type === 'image' && msg.mediaUrl) {
-                    try {
-                        const base64Data = await imageUrlToBase64(msg.mediaUrl);
-                        parts.push({ inlineData: { mimeType: 'image/jpeg', data: base64Data } });
-                    } catch (e) { parts.push({ text: "(Immagine non caricata)" }); }
-                }
-                if(parts.length > 0) { contents.push({ role, parts }); }
-            }
-
-            try {
-                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: persona }] } }) });
-                const result = await response.json();
-                const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
-                const safetyBlock = result.promptFeedback?.blockReason === 'SAFETY' || result.candidates?.[0]?.finishReason === 'SAFETY';
-
-                if (safetyBlock) {
-                    console.warn("Contenuto inappropriato rilevato. Trasferimento del controllo all'admin.");
-                    await updateDoc(docRef, { controlledBy: "admin" });
-                    isAiReplying = false;
-                    return;
-                }
-
-                if (!response.ok) throw new Error(`API error: ${response.status}`);
-                
-                const adelineText = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-                const uselessResponses = ["...", "Non so cosa dire."];
-                if (!adelineText || uselessResponses.includes(adelineText)) {
-                    console.log("Risposta dell'IA vuota o non valida, messaggio non inviato.");
-                    isAiReplying = false; 
-                    return;
-                }
-                
-                const adelineMessage = { sender: "Adeline", text: adelineText, type: "text", mediaUrl: null, timestamp: new Date().toISOString() };
-                await updateDoc(docRef, { messages: arrayUnion(adelineMessage) });
-            } catch (error) { console.error("Errore chiamando Gemini:", error);
-            } finally { isAiReplying = false; }
         }
-
-        function getCurrentDateString(date = new Date()) {
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        }
-        function getTimeSlot(date = new Date()) {
-            const hour = date.getHours();
-            if (hour >= 7 && hour <= 13) return 'morning';
-            if (hour > 13 && hour <= 20) return 'afternoon';
-            return 'evening';
-        }
-
-        async function triggerAiResponseIfNeeded(chatData) {
+        
+        async function triggerAiResponseIfNeeded(chatData) { 
             const lastMessage = (chatData.messages || []).slice(-1)[0];
-            if (chatData.controlledBy !== 'ai' || isAiReplying || !lastMessage || lastMessage.sender !== 'user') {
-                return;
-            }
-
+            if (chatData.controlledBy !== 'ai' || isAiReplying || !lastMessage || lastMessage.sender !== 'user') return;
             isAiReplying = true;
             const updatedProfile = await extractAndUpdateProfile(chatData.userProfile);
             
@@ -411,23 +302,31 @@
                 }, 10000);
             }, delay);
         }
-        
+
+        // --- FUNZIONE PRINCIPALE ---
         async function main() {
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     chatId = new URLSearchParams(window.location.search).get('id');
-                    await checkPaymentStatus();
-                    if (!chatId) { showStatus("ID della chat non trovato."); return; }
-                    
-                    const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
-                    unsubscribe = onSnapshot(docRef, (docSnap) => {
-                        if (docSnap.exists()) {
-                            const chatData = docSnap.data();
-                            handleLockState(chatData.isLocked || false);
-                            renderMessages(chatData.messages || []);
-                            triggerAiResponseIfNeeded(chatData);
-                        } else { showStatus("Questa chat non esiste o è stata eliminata."); }
-                    }, (error) => { console.error("Errore onSnapshot:", error); showStatus("Errore nel caricamento della chat."); });
+                    if (chatId) {
+                        nicknamePrompt.style.display = 'none';
+                        mainContent.style.display = 'flex';
+                        await checkPaymentStatus();
+                        const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
+                        unsubscribe = onSnapshot(docRef, (docSnap) => {
+                            if (docSnap.exists()) {
+                                const chatData = docSnap.data();
+                                handleLockState(chatData.isLocked || false);
+                                renderMessages(chatData.messages || []);
+                                triggerAiResponseIfNeeded(chatData);
+                            } else {
+                                showStatus("Questa chat non esiste o è stata eliminata.");
+                            }
+                        });
+                    } else {
+                        mainContent.style.display = 'none';
+                        nicknamePrompt.style.display = 'flex';
+                    }
                 }
             });
             if (!auth.currentUser) {
