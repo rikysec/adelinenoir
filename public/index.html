@@ -247,7 +247,7 @@
                 paymentOverlay.classList.add('opacity-0', 'pointer-events-none');
             }
         }
-
+        
         function generateMessageId() {
             return `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         }
@@ -322,6 +322,60 @@
             if (error) { document.getElementById('payment-message').textContent = error.message; }
             setLoading(false);
         });
+
+        async function extractAndUpdateProfile(currentProfile) {
+            // ... (implementazione completa)
+        }
+
+        async function getAdelineResponse(isResuming = false, userProfile = {}) {
+            // ... (implementazione completa)
+        }
+        
+        function getCurrentDateString(date = new Date()) { /* ... */ }
+        function getTimeSlot(date = new Date()) { /* ... */ }
+
+        async function triggerAiResponseIfNeeded(chatData) {
+            const lastMessage = (chatData.messages || []).slice(-1)[0];
+            if (chatData.controlledBy !== 'ai' || isAiReplying || !lastMessage || lastMessage.sender !== 'user') {
+                return;
+            }
+
+            isAiReplying = true;
+            const updatedProfile = await extractAndUpdateProfile(chatData.userProfile);
+            
+            const now = new Date();
+            const currentDateString = getCurrentDateString(now);
+            const currentSlot = getTimeSlot(now);
+            const lastMessageDate = new Date(lastMessage.timestamp);
+            const lastMessageDateString = getCurrentDateString(lastMessageDate);
+            const lastMessageSlot = getTimeSlot(lastMessageDate);
+            const usageToday = chatData.usage?.[currentDateString] || { morning: 0, afternoon: 0, evening: 0 };
+            const morningUsed = usageToday.morning || 0, afternoonUsed = usageToday.afternoon || 0, eveningUsed = usageToday.evening || 0;
+            const isResuming = currentDateString !== lastMessageDateString || currentSlot !== lastMessageSlot;
+            
+            let currentLimit = 0, currentUsage = 0;
+            if (currentSlot === 'morning') { currentLimit = MESSAGE_LIMITS.morning; currentUsage = morningUsed; } 
+            else if (currentSlot === 'afternoon') { currentLimit = MESSAGE_LIMITS.afternoon; currentUsage = afternoonUsed; } 
+            else { const rollover = Math.max(0, MESSAGE_LIMITS.morning - morningUsed) + Math.max(0, MESSAGE_LIMITS.afternoon - afternoonUsed); currentLimit = MESSAGE_LIMITS.evening + rollover; currentUsage = eveningUsed; }
+            
+            if (currentUsage >= currentLimit) { isAiReplying = false; return; }
+
+            const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
+            await updateDoc(docRef, { [`usage.${currentDateString}.${currentSlot}`]: increment(1) });
+            
+            let delay = isResuming ? Math.floor(Math.random() * (600000 - 300000 + 1)) + 300000 : Math.floor(Math.random() * (300000 - 30000 + 1)) + 30000;
+            
+            // LOG DI DEBUG
+            console.log(`[DEBUG] Chat ID ${chatId}: Timer di risposta avviato. Adeline risponderà tra ${Math.round(delay / 1000)} secondi.`);
+
+            setTimeout(() => {
+                showTyping();
+                setTimeout(() => {
+                    hideTyping();
+                    getAdelineResponse(isResuming, updatedProfile);
+                }, 10000);
+            }, delay);
+        }
         
         async function main() {
             onAuthStateChanged(auth, async (user) => {
