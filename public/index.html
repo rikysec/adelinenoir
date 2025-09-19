@@ -20,7 +20,6 @@
 </head>
 <body class="h-full flex flex-col relative">
 
-    <!-- Schermata di Pagamento -->
     <div id="payment-overlay" class="absolute inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50 opacity-0 pointer-events-none">
         <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full text-center">
             <h2 class="text-2xl font-bold text-gray-800 mb-4">Chat Interrotta</h2>
@@ -34,7 +33,6 @@
         </div>
     </div>
 
-    <!-- Contenuto principale della chat -->
     <div id="main-content" class="h-full flex flex-col">
         <header class="bg-white shadow-md p-4 flex items-center space-x-4 z-10">
             <div class="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center text-white text-xl font-bold">A</div>
@@ -190,7 +188,8 @@
             const messageInput = document.getElementById('message-input');
             const text = messageInput.value.trim();
             if (!text && !mediaData) return;
-            const newMessage = { sender: 'user', text: text, type: mediaData ? 'image' : 'text', mediaUrl: mediaData ? mediaData.url : null, timestamp: new Date().toISOString() };
+            // --- MODIFICA 1: Aggiunto messageId al messaggio dell'utente ---
+            const newMessage = { messageId: crypto.randomUUID(), sender: 'user', text: text, type: mediaData ? 'image' : 'text', mediaUrl: mediaData ? mediaData.url : null, timestamp: new Date().toISOString() };
             const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
             await updateDoc(docRef, { messages: arrayUnion(newMessage) });
             messageInput.value = '';
@@ -354,7 +353,8 @@
                     return;
                 }
                 
-                const adelineMessage = { sender: "Adeline", text: adelineText, type: "text", mediaUrl: null, timestamp: new Date().toISOString() };
+                // --- MODIFICA 2: Aggiunto messageId al messaggio dell'IA ---
+                const adelineMessage = { messageId: crypto.randomUUID(), sender: "Adeline", text: adelineText, type: "text", mediaUrl: null, timestamp: new Date().toISOString() };
                 await updateDoc(docRef, { messages: arrayUnion(adelineMessage) });
             } catch (error) { console.error("Errore chiamando Gemini:", error);
             } finally { isAiReplying = false; }
@@ -439,4 +439,3 @@
     </script>
 </body>
 </html>
-
