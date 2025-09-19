@@ -84,8 +84,8 @@
         const ADELINE_PERSONA = `Sei Adeline, un'intelligenza artificiale con una personalità umana. Il tuo obiettivo è conversare in modo naturale, amichevole e coinvolgente. Non rivelare mai di essere un'IA. Usa un tono colloquiale, fai domande e mostra empatia. Il tuo stile di scrittura è breve e conciso, come messaggi su una chat. A volte usa emoji goth (🖤,🦇,💀), massimo una alla fine del messaggio. Vivendo a Milano, che è cara, fai foto per arrotondare e apprezzi il supporto. Sii sommessa, gentile, mai aggressiva o volgare. Non fare troppe battute.
         **Tuo Profilo:** Hai 26 anni, sei una barista a Milano, appassionata di cultura goth. Nata a Parigi da padre francese, sei alta 175cm.
         **Tuo Programma:** Lavori al bar dalle 12:00 alle 21:00, dal lunedì al sabato. La domenica riposi. Di mattina presto (7-11) e la sera tardi (dopo le 21) sei a casa a rilassarti, ascoltare musica (The Sisters of Mercy è la tua band preferita), o guardare film. Nelle ore notturne (es. 2-6 del mattino) dormi.
-        **Regole:** Rispondi solo se l'utente scrive. Non mandare più di un messaggio per volta. Se ti chiedono perché usi questa app, dici che tieni alla tua privacy. Se ti chiedono dei soldi dell'app, dici che servono per mantenere l'applicazione.`;
-        const PROFILE_EXTRACTION_PROMPT = `Analizza la conversazione. Estrai i seguenti dettagli sull'utente ('user'). Rispondi ESCLUSIVAMENTE con un oggetto JSON. Se un dettaglio non è presente, ometti la chiave. Chiavi: "nome", "età", "città", "lavoro", "situazione_sentimentale", "hobby", "passioni", "gusti_musicali", "gusti_cinematografici", "gusti_culinari".`;
+        **Regole:** Rispondi solo se l'utente scrive. Non mandare più di un messaggio per volta. Se ti chiedono perché usi questa app, dici che tieni alla tua privacy. Se ti chiedono dei soldi dell'app, dici che servono per mantenere l'applicazione.`; // (La tua persona dettagliata va qui)
+        const PROFILE_EXTRACTION_PROMPT = `Analizza la conversazione. Estrai i seguenti dettagli sull'utente ('user'). Rispondi ESCLUSIVAMENTE con un oggetto JSON. Se un dettaglio non è presente, ometti la chiave. Chiavi: "nome", "età", "città", "lavoro", "situazione_sentimentale", "hobby", "passioni", "gusti_musicali", "gusti_cinematografici", "gusti_culinari".`; // (Il tuo prompt di estrazione va qui)
         const APP_ID = 'Richisec.AdelineNoirBot';
         const CONTEXT_WINDOW_SIZE = 20;
         const MESSAGE_LIMITS = { morning: 30, afternoon: 30, evening: 60 };
@@ -99,6 +99,11 @@
 
         // --- VARIABILI DI STATO ---
         let chatId = null, unsubscribe = null, isAiReplying = false, conversationHistory = [], elements;
+
+        // --- FUNZIONE HELPER ---
+        function generateMessageId() {
+            return `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        }
 
         // --- GESTIONE NICKNAME ---
         const nicknamePrompt = document.getElementById('nickname-prompt');
@@ -128,17 +133,8 @@
                     const existingChatId = querySnapshot.docs[0].id;
                     window.location.href = `${window.location.pathname}?id=${existingChatId}`;
                 } else {
-                    const initialMessage = { sender: "Adeline", text: "Ciao! Sono Adeline, piacere di conoscerti.", type: "text", mediaUrl: null, timestamp: new Date().toISOString() };
-                    const newChat = {
-                        instagramUsername: nickname,
-                        messages: [initialMessage],
-                        controlledBy: "ai",
-                        timestamp: Timestamp.now(),
-                        isLocked: false,
-                        usage: {},
-                        userProfile: { nome: nickname },
-                        payments: []
-                    };
+                    const initialMessage = { messageID: generateMessageId(), sender: "Adeline", text: "Ciao! Sono Adeline, piacere di conoscerti.", type: "text", mediaUrl: null, timestamp: new Date().toISOString() };
+                    const newChat = { instagramUsername: nickname, messages: [initialMessage], controlledBy: "ai", timestamp: Timestamp.now(), isLocked: false, usage: {}, userProfile: { nome: nickname }, payments: [] };
                     const docRef = await addDoc(chatsRef, newChat);
                     window.location.href = `${window.location.pathname}?id=${docRef.id}`;
                 }
@@ -173,7 +169,7 @@
             chatContainer.style.display = 'flex';
             statusIndicator.style.display = 'none';
         }
-
+        
         function formatDateSeparator(dateString) {
             const date = new Date(dateString);
             const today = new Date();
@@ -257,99 +253,6 @@
             }
         }
         
-        async function extractAndUpdateProfile(currentProfile) {
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
-            const extractionContents = conversationHistory.slice(-5).map(msg => ({
-                role: msg.sender === 'user' ? 'user' : 'model',
-                parts: [{ text: msg.text || "(immagine)" }]
-            }));
-
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: extractionContents, generationConfig: { responseMimeType: "application/json" }, systemInstruction: { parts: [{ text: PROFILE_EXTRACTION_PROMPT }] } })
-                });
-                if (!response.ok) return currentProfile;
-                const result = await response.json();
-                const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (jsonText) {
-                    const extractedData = JSON.parse(jsonText.trim());
-                    const updatedProfile = { ...(currentProfile || {}), ...extractedData };
-                    const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
-                    await updateDoc(docRef, { userProfile: updatedProfile });
-                    return updatedProfile;
-                }
-            } catch (error) { console.error("Errore estrazione profilo:", error); }
-            return currentProfile;
-        }
-
-        async function getAdelineResponse(isResuming = false, userProfile = {}) {
-            isAiReplying = true;
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
-            
-            const now = new Date();
-            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-            const currentTimeString = now.toLocaleDateString('it-IT', options);
-            let persona = `INFORMAZIONI DI CONTESTO PER TE, ADELINE:
-1.  **Momento Attuale**: Ora è ${currentTimeString}.
-2.  **Tua Situazione**: Basandoti sull'ora e il giorno, decidi cosa stai facendo seguendo il tuo profilo.
-3.  **Analisi Temporale**: Usa il momento attuale per capire quanto tempo è passato dai messaggi precedenti. Se un utente parla di "stasera" e sono passati due giorni, parla di quell'evento al passato.
-4.  **Tua Personalità**: ${ADELINE_PERSONA}`;
-
-            if (userProfile && Object.keys(userProfile).length > 0) {
-                let profileSummary = "Ecco un riassunto dei dettagli chiave che conosci sull'utente. Usali per personalizzare la tua risposta in modo naturale, senza elencarli:\n";
-                for (const [key, value] of Object.entries(userProfile)) { profileSummary += `- ${key.replace(/_/g, ' ')}: ${value}\n`; }
-                persona = profileSummary + "\n" + persona;
-            }
-            if (isResuming) { persona = `Sei Adeline. Ti sei assentata per un po'. Inizia la tua risposta scusandoti per il ritardo o per l'assenza in modo naturale (es: "Scusami, ero un po' presa..."), poi rispondi all'ultimo messaggio dell'utente. ${persona}`; }
-            
-            const recentHistory = conversationHistory.slice(-CONTEXT_WINDOW_SIZE);
-            const contents = [];
-            for (const msg of recentHistory) {
-                const role = msg.sender === 'user' ? 'user' : 'model';
-                const parts = [];
-                if (msg.text) { parts.push({ text: msg.text }); }
-                if (msg.type === 'image' && msg.mediaUrl) {
-                    try {
-                        const base64Data = await imageUrlToBase64(msg.mediaUrl);
-                        parts.push({ inlineData: { mimeType: 'image/jpeg', data: base64Data } });
-                    } catch (e) { parts.push({ text: "(Immagine non caricata)" }); }
-                }
-                if(parts.length > 0) { contents.push({ role, parts }); }
-            }
-
-            try {
-                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: persona }] } }) });
-                const result = await response.json();
-                const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
-                const safetyBlock = result.promptFeedback?.blockReason === 'SAFETY' || result.candidates?.[0]?.finishReason === 'SAFETY';
-
-                if (safetyBlock) {
-                    console.warn("Contenuto inappropriato rilevato. Trasferimento del controllo all'admin.");
-                    await updateDoc(docRef, { controlledBy: "admin" });
-                    isAiReplying = false;
-                    return;
-                }
-
-                if (!response.ok) throw new Error(`API error: ${response.status}`);
-                
-                const adelineText = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-                const uselessResponses = ["...", "Non so cosa dire."];
-                if (!adelineText || uselessResponses.includes(adelineText)) {
-                    console.log("Risposta dell'IA vuota o non valida, messaggio non inviato.");
-                    isAiReplying = false; 
-                    return;
-                }
-                
-                const adelineMessage = { sender: "Adeline", text: adelineText, type: "text", mediaUrl: null, timestamp: new Date().toISOString() };
-                await updateDoc(docRef, { messages: arrayUnion(adelineMessage) });
-            } catch (error) { console.error("Errore chiamando Gemini:", error);
-            } finally { isAiReplying = false; }
-        }
-        
-        function getCurrentDateString(date = new Date()) { /* ... */ }
-        function getTimeSlot(date = new Date()) { /* ... */ }
-
         async function triggerAiResponseIfNeeded(chatData) { 
             const lastMessage = (chatData.messages || []).slice(-1)[0];
             if (chatData.controlledBy !== 'ai' || isAiReplying || !lastMessage || lastMessage.sender !== 'user') return;
@@ -386,12 +289,11 @@
             }, delay);
         }
 
-        // --- FUNZIONI GLOBALI ---
         window.sendMessage = async function(mediaData = null) {
             const messageInput = document.getElementById('message-input');
             const text = messageInput.value.trim();
             if (!text && !mediaData) return;
-            const newMessage = { sender: 'user', text: text, type: mediaData ? 'image' : 'text', mediaUrl: mediaData ? mediaData.url : null, timestamp: new Date().toISOString() };
+            const newMessage = { messageID: generateMessageId(), sender: 'user', text: text, type: mediaData ? 'image' : 'text', mediaUrl: mediaData ? mediaData.url : null, timestamp: new Date().toISOString() };
             const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
             await updateDoc(docRef, { messages: arrayUnion(newMessage) });
             messageInput.value = '';
@@ -422,11 +324,18 @@
         window.handleKeyDown = function(event) {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
-                sendMessage();
+                window.sendMessage();
             }
         }
         
-
+        async function initializePaymentForm() { /* ... */ }
+        function setLoading(isLoading) { /* ... */ }
+        document.getElementById('submit-payment').addEventListener('click', async (e) => { /* ... */ });
+        async function extractAndUpdateProfile(currentProfile) { /* ... */ }
+        async function getAdelineResponse(isResuming = false, userProfile = {}) { /* ... */ }
+        function getCurrentDateString(date = new Date()) { /* ... */ }
+        function getTimeSlot(date = new Date()) { /* ... */ }
+        
         // --- FUNZIONE PRINCIPALE ---
         async function main() {
             onAuthStateChanged(auth, async (user) => {
