@@ -382,28 +382,21 @@
             
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
             const recentHistory = conversationHistory.slice(-CONTEXT_WINDOW_SIZE);
-            const contents = [];
-            for (const msg of recentHistory) {
-                const role = msg.sender === 'user' ? 'user' : 'model';
-                const parts = [];
-                if (msg.text) { parts.push({ text: msg.text }); }
-                if (msg.type === 'image' && msg.mediaUrl) {
-                    try {
-                        const base64Data = await imageUrlToBase64(msg.mediaUrl);
-                        parts.push({ inlineData: { mimeType: 'image/jpeg', data: base64Data } });
-                    } catch (e) { parts.push({ text: "(Immagine non caricata)" }); }
-                }
-                if(parts.length > 0) { contents.push({ role, parts }); }
-            }
+            const contents = recentHistory.map(msg => ({
+                role: msg.sender === 'user' ? 'user' : 'model',
+                parts: [{ text: msg.text || "(immagine)" }]
+            }));
 
             try {
                 const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: persona }] } }) });
                 const result = await response.json();
                 const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
+                
+                // Il controllo di sicurezza primario avviene prima, nella funzione 'checkMessageForHandoff'.
+                // Manteniamo questo come fallback nel caso in cui la risposta venga comunque bloccata.
                 const safetyBlock = result.promptFeedback?.blockReason === 'SAFETY' || result.candidates?.[0]?.finishReason === 'SAFETY';
-
                 if (safetyBlock) {
-                    console.warn("Contenuto inappropriato rilevato. Trasferimento del controllo al bot NSFW.");
+                    console.warn("Blocco di sicurezza API rilevato (fallback). Trasferimento al bot NSFW.");
                     await updateDoc(docRef, { controlledBy: "NSFW" });
                     isAiReplying = false;
                     return;
@@ -425,6 +418,44 @@
             } finally { isAiReplying = false; }
         }
         
+        // --- NUOVA FUNZIONE DI CONTROLLO PREVENTIVO ---
+        async function checkMessageForHandoff(message) {
+            if (!message || message.sender !== 'user' || !message.text) {
+                return false;
+            }
+
+            const handoffSystemPrompt = `Analyze the user's message. Is it sexually explicit, pornographic, or requesting an erotic roleplay? Answer ONLY with "yes" or "no".`;
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
+            const contents = [{ role: 'user', parts: [{ text: message.text }] }];
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: handoffSystemPrompt }] } })
+                });
+
+                if (!response.ok) {
+                    console.error("Handoff check API error:", response.status);
+                    return false;
+                }
+
+                const result = await response.json();
+                const classification = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toLowerCase();
+
+                if (classification === 'yes') {
+                    console.warn("Messaggio esplicito rilevato dal pre-controllo. Trasferimento al bot NSFW.");
+                    const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
+                    await updateDoc(docRef, { controlledBy: "NSFW" });
+                    return true; // Handoff avvenuto
+                }
+                return false; // Nessun handoff necessario
+            } catch (error) {
+                console.error("Errore durante il controllo per l'handoff:", error);
+                return false;
+            }
+        }
+
         async function checkAndResumeSFWControl(chatData) {
             if (isCheckingSafety) return;
             isCheckingSafety = true;
@@ -480,7 +511,7 @@
 
         async function triggerAiResponseIfNeeded(chatData) {
             const lastMessage = (chatData.messages || []).slice(-1)[0];
-            if (chatData.controlledBy !== 'ai' || isAiReplying || !lastMessage || lastMessage.sender !== 'user') {
+            if (isAiReplying || !lastMessage || lastMessage.sender !== 'user') {
                 return;
             }
 
@@ -548,10 +579,16 @@
                                 }
                             }
 
-                            if (chatData.controlledBy === 'ai') {
-                                triggerAiResponseIfNeeded(chatData);
-                            } else if (chatData.controlledBy === 'NSFW' && isNewMessageFromUser) {
-                                checkAndResumeSFWControl(chatData);
+                            // --- NUOVA LOGICA DI CONTROLLO ---
+                            if (isNewMessageFromUser) {
+                                if (chatData.controlledBy === 'ai') {
+                                    const didHandoff = await checkMessageForHandoff(latestMessage);
+                                    if (!didHandoff) {
+                                        triggerAiResponseIfNeeded(chatData);
+                                    }
+                                } else if (chatData.controlledBy === 'NSFW') {
+                                    checkAndResumeSFWControl(chatData);
+                                }
                             }
                             
                             lastKnownMessageId = latestMessage ? latestMessage.messageId : null;
