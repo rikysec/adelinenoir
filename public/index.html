@@ -20,6 +20,14 @@
 </head>
 <body class="h-full flex flex-col relative">
 
+    <!-- Banner per richiesta permessi notifiche -->
+    <div id="notification-banner" class="fixed bottom-0 left-0 right-0 bg-gray-800 text-white p-4 flex items-center justify-center space-x-4 z-50 hidden">
+        <p>Vuoi ricevere una notifica quando Adeline ti scrive?</p>
+        <button id="allow-notifications" class="bg-purple-500 hover:bg-purple-600 px-4 py-2 rounded-lg font-semibold">Abilita</button>
+        <button id="deny-notifications" class="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg">No, grazie</button>
+    </div>
+
+    <!-- Schermata di Pagamento -->
     <div id="payment-overlay" class="absolute inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50 opacity-0 pointer-events-none">
         <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full text-center">
             <h2 class="text-2xl font-bold text-gray-800 mb-4">Chat Interrotta</h2>
@@ -33,6 +41,7 @@
         </div>
     </div>
 
+    <!-- Contenuto principale della chat -->
     <div id="main-content" class="h-full flex flex-col">
         <header class="bg-white shadow-md p-4 flex items-center space-x-4 z-10">
             <div class="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center text-white text-xl font-bold">A</div>
@@ -68,8 +77,6 @@
         
         const CONTEXT_WINDOW_SIZE = 20;
         const MESSAGE_LIMITS = { morning: 30, afternoon: 30, evening: 60 };
-        // --- RIMOSSO --- La costante ADELINE_PERSONA è stata rimossa.
-        
         const PROFILE_EXTRACTION_PROMPT = `Analizza la conversazione. Estrai i seguenti dettagli sull'utente ('user'). Rispondi ESCLUSIVAMENTE con un oggetto JSON. Se un dettaglio non è presente, ometti la chiave. Chiavi: "nome", "età", "città", "lavoro", "situazione_sentimentale", "hobby", "passioni", "gusti_musicali", "gusti_cinematografici", "gusti_culinari".`;
 
         // --- INIZIALIZZAZIONE E VARIABILI DI STATO ---
@@ -81,9 +88,43 @@
         const stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
         const APP_ID = 'Richisec.AdelineNoirBot';
         let chatId = null, unsubscribe = null, isAiReplying = false, conversationHistory = [], elements;
-        
-        // --- NUOVA VARIABILE --- Per memorizzare la persona caricata dal DB
-        let adelinePersonaText = null;
+        let adelinePersona = ""; // Variabile globale per la personalità
+
+        // --- FUNZIONI NOTIFICHE ---
+        function showNotification(title, body) {
+            if (Notification.permission === 'granted') {
+                const iconUrl = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="%238B5CF6"/><text x="50" y="50" font-family="Arial" font-size="50" fill="white" text-anchor="middle" dy=".3em">A</text></svg>';
+                new Notification(title, { body, icon: iconUrl });
+            }
+        }
+
+        function initializeNotifications() {
+            if (!('Notification' in window)) {
+                console.log("Questo browser non supporta le notifiche desktop.");
+                return;
+            }
+
+            const banner = document.getElementById('notification-banner');
+            const allowButton = document.getElementById('allow-notifications');
+            const denyButton = document.getElementById('deny-notifications');
+
+            if (Notification.permission === 'default') {
+                banner.classList.remove('hidden');
+            }
+
+            allowButton.addEventListener('click', () => {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        showNotification('Grazie!', 'Ora riceverai le notifiche da Adeline.');
+                    }
+                    banner.classList.add('hidden');
+                });
+            });
+
+            denyButton.addEventListener('click', () => {
+                banner.classList.add('hidden');
+            });
+        }
 
         // --- FUNZIONI UI ---
         const typingIndicator = document.getElementById('typing-indicator');
@@ -175,7 +216,6 @@
         }
         
         async function imageUrlToBase64(url) {
-            // Usiamo un proxy CORS se necessario
             const response = await fetch(`https://cors-anywhere.herokuapp.com/${url}`);
             const blob = await response.blob();
             return new Promise((resolve, reject) => {
@@ -269,6 +309,23 @@
             }
             window.history.replaceState({}, document.title, window.location.pathname + "?id=" + chatId);
         }
+        
+        async function getPersona(nationality) {
+            try {
+                const personaDocRef = doc(db, "personas", nationality);
+                const personaDoc = await getDoc(personaDocRef);
+                if (personaDoc.exists()) {
+                    return personaDoc.data().biography;
+                } else {
+                    console.warn(`Personalità per "${nationality}" non trovata. Uso fallback.`);
+                    const fallbackDoc = await getDoc(doc(db, "personas", "it"));
+                    return fallbackDoc.exists() ? fallbackDoc.data().biography : "Sono Adeline, piacere di conoscerti.";
+                }
+            } catch (error) {
+                console.error("Errore nel caricare la personalità:", error);
+                return "Sono Adeline, piacere di conoscerti.";
+            }
+        }
 
         async function extractAndUpdateProfile(currentProfile) {
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
@@ -297,7 +354,7 @@
         }
 
         async function getAdelineResponse(isResuming = false, userProfile = {}) {
-            if (!adelinePersonaText) {
+            if (!adelinePersona) {
                 console.error("La personalità di Adeline non è stata caricata. Impossibile rispondere.");
                 return;
             }
@@ -311,7 +368,7 @@
 1.  **Momento Attuale**: Ora è ${currentTimeString}.
 2.  **Tua Situazione**: Basandoti sull'ora e il giorno, decidi cosa stai facendo seguendo il tuo profilo.
 3.  **Analisi Temporale**: Usa il momento attuale per capire quanto tempo è passato dai messaggi precedenti. Se un utente parla di "stasera" e sono passati due giorni, parla di quell'evento al passato.
-4.  **Tua Personalità**: ${adelinePersonaText}`; // Usa la persona caricata
+4.  **Tua Personalità**: ${adelinePersona}`;
 
             if (userProfile && Object.keys(userProfile).length > 0) {
                 let profileSummary = "Ecco un riassunto dei dettagli chiave che conosci sull'utente. Usali per personalizzare la tua risposta in modo naturale, senza elencarli:\n";
@@ -382,11 +439,6 @@
             if (chatData.controlledBy !== 'ai' || isAiReplying || !lastMessage || lastMessage.sender !== 'user') {
                 return;
             }
-             // Assicurati che la persona sia caricata prima di procedere
-            if (!adelinePersonaText) {
-                console.log("In attesa del caricamento della personalità...");
-                return;
-            }
 
             isAiReplying = true;
             const updatedProfile = await extractAndUpdateProfile(chatData.userProfile);
@@ -421,30 +473,6 @@
             }, delay);
         }
         
-        // --- NUOVA FUNZIONE ---
-        // Funzione per caricare la personalità di Adeline dal database
-        async function fetchPersona(nationality) {
-            // Se non c'è una nazionalità, usiamo 'it' come fallback
-            const personaId = nationality || 'it';
-            try {
-                const personaRef = doc(db, "personas", personaId);
-                const personaSnap = await getDoc(personaRef);
-                if (personaSnap.exists()) {
-                    adelinePersonaText = personaSnap.data().personaText;
-                    console.log(`Personalità per "${personaId}" caricata con successo.`);
-                } else {
-                    console.error(`Nessuna personalità trovata per "${personaId}". Verrà usata la personalità di fallback se disponibile.`);
-                    // Potresti voler caricare una personalità di default qui
-                    const fallbackRef = doc(db, "personas", "it");
-                    const fallbackSnap = await getDoc(fallbackRef);
-                    if(fallbackSnap.exists()) adelinePersonaText = fallbackSnap.data().personaText;
-                }
-            } catch (error) {
-                console.error("Errore nel caricamento della personalità:", error);
-                showStatus("Errore nel caricare la configurazione della chat.");
-            }
-        }
-
         async function main() {
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
@@ -452,20 +480,29 @@
                     await checkPaymentStatus();
                     if (!chatId) { showStatus("ID della chat non trovato."); return; }
                     
+                    initializeNotifications();
+                    
                     const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
                     unsubscribe = onSnapshot(docRef, async (docSnap) => {
                         if (docSnap.exists()) {
                             const chatData = docSnap.data();
+                            const lastKnownMessageId = (conversationHistory.length > 0) ? conversationHistory.slice(-1)[0].messageId : null;
                             
-                            // --- LOGICA MODIFICATA ---
-                            // Se la personalità non è ancora stata caricata, la carichiamo ora.
-                            if (!adelinePersonaText) {
-                                await fetchPersona(chatData.nationality);
+                            if (!adelinePersona) {
+                                adelinePersona = await getPersona(chatData.nationality || "it");
                             }
-                            
+
                             handleLockState(chatData.isLocked || false);
                             renderMessages(chatData.messages || []);
-                            // La chiamata a trigger viene eseguita comunque, ma la funzione aspetterà che `adelinePersonaText` sia valorizzato.
+                            
+                            const latestMessage = (chatData.messages && chatData.messages.length > 0) ? chatData.messages.slice(-1)[0] : null;
+
+                            if (latestMessage && latestMessage.messageId !== lastKnownMessageId && latestMessage.sender === 'Adeline') {
+                                if (document.hidden) {
+                                    showNotification('Nuovo messaggio da Adeline', latestMessage.text || 'Ha inviato un\'immagine.');
+                                }
+                            }
+                            
                             triggerAiResponseIfNeeded(chatData);
                         } else { showStatus("Questa chat non esiste o è stata eliminata."); }
                     }, (error) => { console.error("Errore onSnapshot:", error); showStatus("Errore nel caricamento della chat."); });
@@ -480,3 +517,4 @@
     </script>
 </body>
 </html>
+
