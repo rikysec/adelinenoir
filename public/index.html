@@ -315,11 +315,14 @@
                 const personaDocRef = doc(db, "personas", nationality);
                 const personaDoc = await getDoc(personaDocRef);
                 if (personaDoc.exists()) {
-                    return personaDoc.data().biography;
+                    // --- MODIFICA QUI ---
+                    // Legge il campo "personaText" invece di "biography"
+                    return personaDoc.data().personaText;
                 } else {
                     console.warn(`Personalità per "${nationality}" non trovata. Uso fallback.`);
                     const fallbackDoc = await getDoc(doc(db, "personas", "it"));
-                    return fallbackDoc.exists() ? fallbackDoc.data().biography : "Sono Adeline, piacere di conoscerti.";
+                    // --- MODIFICA QUI ---
+                    return fallbackDoc.exists() ? fallbackDoc.data().personaText : "Sono Adeline, piacere di conoscerti.";
                 }
             } catch (error) {
                 console.error("Errore nel caricare la personalità:", error);
