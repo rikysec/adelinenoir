@@ -52,12 +52,17 @@
             <p id="status-text" class="text-gray-500 text-center p-4">Caricamento della chat...</p>
         </div>
         <div id="typing-indicator" class="p-4 hidden"><p class="text-gray-500 italic">Adeline sta scrivendo...</p></div>
+        <!-- SEZIONE CORRETTA -->
         <footer class="bg-white p-4 border-t border-gray-200">
             <div class="flex items-center space-x-2">
                 <input type="file" id="file-input" class="hidden" accept="image/*" onchange="uploadMedia()">
-                <button onclick="document.getElementById('file-input').click()" class="p-3 rounded-full hover:bg-gray-200 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg></button>
+                <button onclick="document.getElementById('file-input').click()" class="p-3 rounded-full hover:bg-gray-200 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                </button>
                 <input type="text" id="message-input" placeholder="Scrivi un messaggio..." class="flex-grow p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500" onkeydown="handleKeyDown(event)">
-                <button id="send-button" onclick="sendMessage()" class="p-3 rounded-full bg-purple-500 text-white hover:bg-purple-600 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-send-horizontal"><path d="m3 3 3 9-3 9 19-9Z"/><path d="M6 12h16"/></svg></button>
+                <button id="send-button" onclick="sendMessage()" class="p-3 rounded-full bg-purple-500 text-white hover:bg-purple-600 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-send-horizontal"><path d="m3 3 3 9-3 9 19-9Z"></path><path d="M6 12h16"></path></svg>
+                </button>
             </div>
             <div id="upload-progress" class="h-1 bg-purple-500 mt-2" style="width: 0%; transition: width 0.3s;"></div>
         </footer>
@@ -606,4 +611,3 @@
     </script>
 </body>
 </html>
-
