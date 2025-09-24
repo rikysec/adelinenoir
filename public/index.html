@@ -88,7 +88,8 @@
         const stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
         const APP_ID = 'Richisec.AdelineNoirBot';
         let chatId = null, unsubscribe = null, isAiReplying = false, conversationHistory = [], elements;
-        let adelinePersona = ""; // Variabile globale per la personalità
+        let adelinePersona = ""; 
+        let userGender = ""; 
 
         // --- FUNZIONI NOTIFICHE ---
         function showNotification(title, body) {
@@ -315,13 +316,10 @@
                 const personaDocRef = doc(db, "personas", nationality);
                 const personaDoc = await getDoc(personaDocRef);
                 if (personaDoc.exists()) {
-                    // --- MODIFICA QUI ---
-                    // Legge il campo "personaText" invece di "biography"
                     return personaDoc.data().personaText;
                 } else {
                     console.warn(`Personalità per "${nationality}" non trovata. Uso fallback.`);
                     const fallbackDoc = await getDoc(doc(db, "personas", "it"));
-                    // --- MODIFICA QUI ---
                     return fallbackDoc.exists() ? fallbackDoc.data().personaText : "Sono Adeline, piacere di conoscerti.";
                 }
             } catch (error) {
@@ -367,11 +365,19 @@
             const now = new Date();
             const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
             const currentTimeString = now.toLocaleDateString('it-IT', options);
+            
+            let genderInstruction = "";
+            if (userGender === 'male') {
+                genderInstruction = "\n5. **Regola Grammaticale Cruciale**: Riferisciti sempre all'utente usando il genere maschile (es. 'sei stanco', 'sei un bravo ragazzo', 'ciao bello').";
+            } else if (userGender === 'female') {
+                genderInstruction = "\n5. **Regola Grammaticale Cruciale**: Riferisciti sempre all'utente usando il genere femminile (es. 'sei stanca', 'sei una brava ragazza', 'ciao bella').";
+            }
+            
             let persona = `INFORMAZIONI DI CONTESTO PER TE, ADELINE:
 1.  **Momento Attuale**: Ora è ${currentTimeString}.
 2.  **Tua Situazione**: Basandoti sull'ora e il giorno, decidi cosa stai facendo seguendo il tuo profilo.
 3.  **Analisi Temporale**: Usa il momento attuale per capire quanto tempo è passato dai messaggi precedenti. Se un utente parla di "stasera" e sono passati due giorni, parla di quell'evento al passato.
-4.  **Tua Personalità**: ${adelinePersona}`;
+4.  **Tua Personalità**: ${adelinePersona}${genderInstruction}`;
 
             if (userProfile && Object.keys(userProfile).length > 0) {
                 let profileSummary = "Ecco un riassunto dei dettagli chiave che conosci sull'utente. Usali per personalizzare la tua risposta in modo naturale, senza elencarli:\n";
@@ -493,6 +499,9 @@
                             
                             if (!adelinePersona) {
                                 adelinePersona = await getPersona(chatData.nationality || "it");
+                            }
+                            if (!userGender) {
+                                userGender = chatData.gender || ""; 
                             }
 
                             handleLockState(chatData.isLocked || false);
