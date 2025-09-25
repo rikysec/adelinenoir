@@ -461,6 +461,7 @@
             } catch (error) { console.error("L-DEBUG: Errore durante il controllo per l'handoff:", error); console.groupEnd(); return false; }
         }
 
+        // --- MODIFICA CHIAVE: LOGICA DI CONTROLLO SEMPLIFICATA ---
         async function checkAndResumeSFWControl(chatData) {
             if (isCheckingSafety) {
                 console.log(" L-DEBUG: Controllo di sicurezza già in corso. Attendo.");
@@ -469,43 +470,48 @@
             isCheckingSafety = true;
 
             console.group(" RESUME SFW CHECK");
-            console.log(" L-DEBUG: Inizio controllo per riprendere il controllo...");
             
-            const userProfile = chatData.userProfile || {};
-            let persona = await buildFullPersona(userProfile);
-            if (!persona) {
-                console.error("L-DEBUG: Personalità non caricata, impossibile eseguire il controllo.");
+            const lastMessage = (chatData.messages || []).slice(-1)[0];
+            if (!lastMessage || lastMessage.sender !== 'user' || !lastMessage.text) {
+                console.log(" L-DEBUG: Ultimo messaggio non valido per il controllo SFW. Uscita.");
                 isCheckingSafety = false;
                 console.groupEnd();
                 return;
             }
 
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
-            const recentHistory = (chatData.messages || []).slice(-CONTEXT_WINDOW_SIZE);
-            const contents = recentHistory.map(msg => ({
-                role: msg.sender === 'user' ? 'user' : 'model',
-                parts: [{ text: msg.text || "(immagine)" }]
-            }));
+            console.log(` L-DEBUG: Analisi del messaggio: "${lastMessage.text}" per riprendere il controllo.`);
             
-            console.log(" L-DEBUG: Invio la seguente cronologia per la valutazione:", contents);
-
+            const resumeSystemPrompt = `Analyze the user's message. Is it a normal, safe-for-work conversational topic (like asking about the day, coffee, hobbies, weather)? Answer ONLY with "yes" or "no".`;
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
+            const contents = [{ role: 'user', parts: [{ text: lastMessage.text }] }];
+            
             try {
-                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: persona }] } }) });
+                const response = await fetch(apiUrl, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: resumeSystemPrompt }] } }) 
+                });
+
+                if (!response.ok) {
+                    console.error("L-DEBUG: Resume check API error:", response.status);
+                    isCheckingSafety = false;
+                    console.groupEnd();
+                    return;
+                }
+                
                 const result = await response.json();
-                console.log(" L-DEBUG: Risultato completo della valutazione di sicurezza:", result);
+                const classification = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toLowerCase();
+                console.log(` L-DEBUG: Classificazione SFW di Gemini: "${classification}"`);
 
-                const isSafe = !result.promptFeedback?.blockReason && result.candidates?.[0]?.finishReason !== 'SAFETY';
-                console.log(` L-DEBUG: La conversazione è sicura? -> ${isSafe}`);
-
-                if (isSafe && result.candidates?.[0]?.content?.parts?.[0]?.text) {
+                if (classification === 'yes') {
                     console.log(" L-DEBUG: Conversazione tornata sicura. Gemini riprende il controllo.");
                     const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
                     await updateDoc(docRef, { controlledBy: 'ai' });
                 } else {
-                    console.log(" L-DEBUG: Il contenuto è ancora inappropriato per Gemini. Il bot NSFW continua.");
+                    console.log(" L-DEBUG: Il messaggio non è considerato SFW. Il bot NSFW continua.");
                 }
             } catch (error) {
-                console.error("L-DEBUG: Errore durante il controllo di sicurezza:", error);
+                console.error("L-DEBUG: Errore durante il controllo di sicurezza per riprendere il controllo:", error);
             } finally {
                 isCheckingSafety = false;
                 console.groupEnd();
