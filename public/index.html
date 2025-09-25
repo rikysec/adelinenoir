@@ -94,7 +94,7 @@
         let chatId = null, unsubscribe = null, isAiReplying = false, conversationHistory = [], elements;
         let adelinePersona = ""; 
         let userGender = "";
-        let lastKnownMessageId = null; // Il nostro "buffer"
+        let lastProcessedMessageId = null; // Il nostro "buffer"
         let isCheckingSafety = false;
 
         // --- FUNZIONI NOTIFICHE ---
@@ -560,16 +560,19 @@
                             renderMessages(chatData.messages || []);
                             
                             const latestMessage = (chatData.messages && chatData.messages.length > 0) ? chatData.messages.slice(-1)[0] : null;
-                            const isNewMessageFromUser = latestMessage && latestMessage.sender === 'user' && latestMessage.messageId !== lastKnownMessageId;
+                            const isNewMessage = latestMessage && latestMessage.messageId !== lastProcessedMessageId;
 
-                            if (latestMessage && latestMessage.messageId !== lastKnownMessageId && latestMessage.sender !== 'user') {
+                            if (isNewMessage && latestMessage.sender !== 'user') {
                                 if (document.hidden) {
                                     showNotification('Nuovo messaggio da Adeline', latestMessage.text || 'Ha inviato un\'immagine.');
                                 }
                             }
 
-                            // --- LOGICA DEL BUFFER ---
-                            if (isNewMessageFromUser) {
+                            // --- LOGICA DEL BUFFER CORRETTA ---
+                            if (isNewMessage && latestMessage.sender === 'user') {
+                                // Aggiorna il buffer subito, per evitare che questo blocco venga eseguito di nuovo per lo stesso messaggio
+                                lastProcessedMessageId = latestMessage.messageId;
+
                                 if (chatData.controlledBy === 'ai') {
                                     const didHandoff = await checkMessageForHandoff(latestMessage);
                                     if (!didHandoff) {
@@ -578,10 +581,11 @@
                                 } else if (chatData.controlledBy === 'NSFW') {
                                     checkAndResumeSFWControl(chatData);
                                 }
+                            } else if (isNewMessage) {
+                                // Aggiorna il buffer anche per i messaggi dei bot, per non rimanere bloccati
+                                lastProcessedMessageId = latestMessage.messageId;
                             }
                             
-                            lastKnownMessageId = latestMessage ? latestMessage.messageId : null;
-
                         } else { showStatus("Questa chat non esiste o è stata eliminata."); }
                     }, (error) => { console.error("Errore onSnapshot:", error); showStatus("Errore nel caricamento della chat."); });
                 }
