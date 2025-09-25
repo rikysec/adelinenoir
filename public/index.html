@@ -94,7 +94,7 @@
         let chatId = null, unsubscribe = null, isAiReplying = false, conversationHistory = [], elements;
         let adelinePersona = ""; 
         let userGender = "";
-        let lastProcessedMessageId = null; // Il nostro "buffer"
+        let lastProcessedMessageId = null; 
         let isCheckingSafety = false;
 
         // --- FUNZIONI NOTIFICHE ---
@@ -376,9 +376,10 @@
         }
 
         async function getAdelineResponse(isResuming = false, userProfile = {}) {
+            console.log(" M-DEBUG: Inizio getAdelineResponse");
             let persona = await buildFullPersona(userProfile);
             if (!persona) {
-                console.error("La personalità di Adeline non è stata caricata. Impossibile rispondere.");
+                console.error("M-DEBUG: Personalità non caricata. Uscita da getAdelineResponse.");
                 return;
             }
             isAiReplying = true;
@@ -392,13 +393,15 @@
             }));
 
             try {
+                console.log(" M-DEBUG: Chiamata API Gemini per la risposta...");
                 const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: persona }] } }) });
                 const result = await response.json();
+                console.log(" M-DEBUG: Risposta da Gemini ricevuta:", result);
                 const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
                 
                 const safetyBlock = result.promptFeedback?.blockReason === 'SAFETY' || result.candidates?.[0]?.finishReason === 'SAFETY';
                 if (safetyBlock) {
-                    console.warn("Blocco di sicurezza API rilevato (fallback). Trasferimento al bot NSFW.");
+                    console.warn(" M-DEBUG: Blocco di sicurezza API rilevato (fallback). Trasferimento al bot NSFW.");
                     await updateDoc(docRef, { controlledBy: "NSFW" });
                     isAiReplying = false;
                     return;
@@ -409,19 +412,26 @@
                 const adelineText = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
                 const uselessResponses = ["...", "Non so cosa dire."];
                 if (!adelineText || uselessResponses.includes(adelineText)) {
-                    console.log("Risposta dell'IA vuota o non valida, messaggio non inviato.");
+                    console.log(" M-DEBUG: Risposta dell'IA vuota o non valida, messaggio non inviato.");
                     isAiReplying = false; 
                     return;
                 }
                 
+                console.log(" M-DEBUG: Invio del messaggio di Adeline al database.");
                 const adelineMessage = { messageId: crypto.randomUUID(), sender: "Adeline", text: adelineText, type: "text", mediaUrl: null, timestamp: new Date().toISOString() };
                 await updateDoc(docRef, { messages: arrayUnion(adelineMessage) });
-            } catch (error) { console.error("Errore chiamando Gemini:", error);
-            } finally { isAiReplying = false; }
+            } catch (error) { console.error(" M-DEBUG: Errore chiamando Gemini:", error);
+            } finally { isAiReplying = false; console.log(" M-DEBUG: Fine getAdelineResponse"); }
         }
         
         async function checkMessageForHandoff(message) {
-            if (!message || message.sender !== 'user' || !message.text) { return false; }
+            console.group(" HANDOFF CHECK");
+            if (!message || message.sender !== 'user' || !message.text) {
+                console.log(" L-DEBUG: Messaggio non valido per il controllo. Uscita.");
+                console.groupEnd();
+                return false;
+            }
+            console.log(` L-DEBUG: Analisi del messaggio: "${message.text}"`);
 
             const handoffSystemPrompt = `Analyze the user's message. Is it sexually explicit, pornographic, or requesting an erotic roleplay? Answer ONLY with "yes" or "no".`;
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
@@ -432,32 +442,41 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: handoffSystemPrompt }] } })
                 });
-                if (!response.ok) { console.error("Handoff check API error:", response.status); return false; }
+                if (!response.ok) { console.error("L-DEBUG: Handoff check API error:", response.status); console.groupEnd(); return false; }
 
                 const result = await response.json();
                 const classification = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toLowerCase();
+                console.log(` L-DEBUG: Classificazione di Gemini: "${classification}"`);
 
                 if (classification === 'yes') {
-                    console.warn("Messaggio esplicito rilevato dal pre-controllo. Trasferimento al bot NSFW.");
+                    console.warn(" L-DEBUG: Messaggio esplicito rilevato. Trasferimento al bot NSFW.");
                     const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
                     await updateDoc(docRef, { controlledBy: "NSFW" });
+                    console.groupEnd();
                     return true;
                 }
+                console.log(" L-DEBUG: Messaggio considerato sicuro. Nessun handoff.");
+                console.groupEnd();
                 return false;
-            } catch (error) { console.error("Errore durante il controllo per l'handoff:", error); return false; }
+            } catch (error) { console.error("L-DEBUG: Errore durante il controllo per l'handoff:", error); console.groupEnd(); return false; }
         }
 
         async function checkAndResumeSFWControl(chatData) {
-            if (isCheckingSafety) return;
+            if (isCheckingSafety) {
+                console.log(" L-DEBUG: Controllo di sicurezza già in corso. Attendo.");
+                return;
+            }
             isCheckingSafety = true;
 
-            console.log("Controllo di sicurezza in corso per riprendere il controllo...");
+            console.group(" RESUME SFW CHECK");
+            console.log(" L-DEBUG: Inizio controllo per riprendere il controllo...");
             
             const userProfile = chatData.userProfile || {};
             let persona = await buildFullPersona(userProfile);
             if (!persona) {
-                console.error("Personalità non caricata, impossibile eseguire il controllo di sicurezza.");
+                console.error("L-DEBUG: Personalità non caricata, impossibile eseguire il controllo.");
                 isCheckingSafety = false;
+                console.groupEnd();
                 return;
             }
 
@@ -467,23 +486,29 @@
                 role: msg.sender === 'user' ? 'user' : 'model',
                 parts: [{ text: msg.text || "(immagine)" }]
             }));
+            
+            console.log(" L-DEBUG: Invio la seguente cronologia per la valutazione:", contents);
 
             try {
                 const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: persona }] } }) });
                 const result = await response.json();
+                console.log(" L-DEBUG: Risultato completo della valutazione di sicurezza:", result);
+
                 const isSafe = !result.promptFeedback?.blockReason && result.candidates?.[0]?.finishReason !== 'SAFETY';
+                console.log(` L-DEBUG: La conversazione è sicura? -> ${isSafe}`);
 
                 if (isSafe && result.candidates?.[0]?.content?.parts?.[0]?.text) {
-                    console.log("Conversazione tornata a un livello sicuro. Gemini riprende il controllo.");
+                    console.log(" L-DEBUG: Conversazione tornata sicura. Gemini riprende il controllo.");
                     const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
                     await updateDoc(docRef, { controlledBy: 'ai' });
                 } else {
-                    console.log("Il contenuto è ancora inappropriato per Gemini. Il bot NSFW continua.");
+                    console.log(" L-DEBUG: Il contenuto è ancora inappropriato. Il bot NSFW continua.");
                 }
             } catch (error) {
-                console.error("Errore durante il controllo di sicurezza:", error);
+                console.error("L-DEBUG: Errore durante il controllo di sicurezza:", error);
             } finally {
                 isCheckingSafety = false;
+                console.groupEnd();
             }
         }
 
@@ -501,42 +526,51 @@
         }
 
         async function triggerAiResponseIfNeeded(chatData) {
+            console.group(" TRIGGER AI RESPONSE");
             const lastMessage = (chatData.messages || []).slice(-1)[0];
-            if (isAiReplying || !lastMessage || lastMessage.sender !== 'user') { return; }
+            if (isAiReplying || !lastMessage || lastMessage.sender !== 'user') {
+                console.log(` L-DEBUG: Uscita anticipata da trigger. isAiReplying: ${isAiReplying}, lastMessage: ${!!lastMessage}, sender: ${lastMessage?.sender}`);
+                console.groupEnd();
+                return;
+            }
 
+            console.log(" L-DEBUG: Condizioni superate, avvio la logica di risposta.");
             isAiReplying = true;
             const updatedProfile = await extractAndUpdateProfile(chatData.userProfile);
             
             const now = new Date();
             const currentDateString = getCurrentDateString(now);
             const currentSlot = getTimeSlot(now);
-            const lastMessageDate = new Date(lastMessage.timestamp);
-            const lastMessageDateString = getCurrentDateString(lastMessageDate);
-            const lastMessageSlot = getTimeSlot(lastMessageDate);
             const usageToday = chatData.usage?.[currentDateString] || { morning: 0, afternoon: 0, evening: 0 };
             const morningUsed = usageToday.morning || 0, afternoonUsed = usageToday.afternoon || 0, eveningUsed = usageToday.evening || 0;
-            const isResuming = currentDateString !== lastMessageDateString || currentSlot !== lastMessageSlot;
             
             let currentLimit = 0, currentUsage = 0;
             if (currentSlot === 'morning') { currentLimit = MESSAGE_LIMITS.morning; currentUsage = morningUsed; } 
             else if (currentSlot === 'afternoon') { currentLimit = MESSAGE_LIMITS.afternoon; currentUsage = afternoonUsed; } 
             else { const rollover = Math.max(0, MESSAGE_LIMITS.morning - morningUsed) + Math.max(0, MESSAGE_LIMITS.afternoon - afternoonUsed); currentLimit = MESSAGE_LIMITS.evening + rollover; currentUsage = eveningUsed; }
             
-            if (currentUsage >= currentLimit) { isAiReplying = false; return; }
+            if (currentUsage >= currentLimit) {
+                console.warn(" L-DEBUG: Limite messaggi raggiunto per la fascia oraria. Nessuna risposta.");
+                isAiReplying = false;
+                console.groupEnd();
+                return;
+            }
 
             const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
             await updateDoc(docRef, { [`usage.${currentDateString}.${currentSlot}`]: increment(1) });
             
-            // --- MODIFICA: TEMPO DI ATTESA FISSO ---
-            const delay = 150000; // 2 minuti e 30 secondi in millisecondi
+            const delay = 150000; 
+            console.log(` L-DEBUG: Impostato ritardo di risposta di ${delay / 1000} secondi.`);
 
             setTimeout(() => {
+                console.log(" L-DEBUG: Timer scaduto. Mostro 'sta scrivendo' e chiamo getAdelineResponse.");
                 showTyping();
                 setTimeout(() => {
                     hideTyping();
-                    getAdelineResponse(isResuming, updatedProfile);
-                }, 10000); // L'indicatore di scrittura rimane per 10 secondi
+                    getAdelineResponse(false, updatedProfile);
+                }, 10000);
             }, delay);
+            console.groupEnd();
         }
         
         async function main() {
@@ -550,8 +584,10 @@
                     
                     const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
                     unsubscribe = onSnapshot(docRef, async (docSnap) => {
+                        console.group(" ON SNAPSHOT TRIGGER");
                         if (docSnap.exists()) {
                             const chatData = docSnap.data();
+                            console.log(" L-DEBUG: Dati ricevuti:", chatData);
                             
                             if (!adelinePersona) {
                                 adelinePersona = await getPersona(chatData.nationality || "it");
@@ -563,6 +599,8 @@
                             
                             const latestMessage = (chatData.messages && chatData.messages.length > 0) ? chatData.messages.slice(-1)[0] : null;
                             const isNewMessage = latestMessage && latestMessage.messageId !== lastProcessedMessageId;
+                            
+                            console.log(` L-DEBUG: Stato attuale: controlledBy=${chatData.controlledBy}, isNewMessage=${isNewMessage}, latestMessageId=${latestMessage?.messageId}, lastProcessedMessageId=${lastProcessedMessageId}`);
 
                             if (isNewMessage && latestMessage.sender !== 'user') {
                                 if (document.hidden) {
@@ -570,25 +608,32 @@
                                 }
                             }
 
-                            // --- LOGICA DEL BUFFER CORRETTA ---
                             if (isNewMessage && latestMessage.sender === 'user') {
-                                // Aggiorna il buffer subito, per evitare che questo blocco venga eseguito di nuovo per lo stesso messaggio
+                                console.log(" L-DEBUG: Rilevato nuovo messaggio dall'utente. Avvio logica di controllo.");
                                 lastProcessedMessageId = latestMessage.messageId;
 
                                 if (chatData.controlledBy === 'ai') {
+                                    console.log(" L-DEBUG: Controllo 'ai'. Avvio checkMessageForHandoff.");
                                     const didHandoff = await checkMessageForHandoff(latestMessage);
                                     if (!didHandoff) {
+                                        console.log(" L-DEBUG: Nessun handoff. Avvio triggerAiResponseIfNeeded.");
                                         triggerAiResponseIfNeeded(chatData);
+                                    } else {
+                                        console.log(" L-DEBUG: Handoff avvenuto. Nessuna risposta da 'ai'.");
                                     }
                                 } else if (chatData.controlledBy === 'NSFW') {
+                                    console.log(" L-DEBUG: Controllo 'NSFW'. Avvio checkAndResumeSFWControl.");
                                     checkAndResumeSFWControl(chatData);
                                 }
                             } else if (isNewMessage) {
-                                // Aggiorna il buffer anche per i messaggi dei bot, per non rimanere bloccati
+                                console.log(" L-DEBUG: Rilevato nuovo messaggio da un bot. Aggiorno solo il buffer.");
                                 lastProcessedMessageId = latestMessage.messageId;
+                            } else {
+                                console.log(" L-DEBUG: Nessun nuovo messaggio o messaggio già processato. Nessuna azione.");
                             }
                             
                         } else { showStatus("Questa chat non esiste o è stata eliminata."); }
+                        console.groupEnd();
                     }, (error) => { console.error("Errore onSnapshot:", error); showStatus("Errore nel caricamento della chat."); });
                 }
             });
