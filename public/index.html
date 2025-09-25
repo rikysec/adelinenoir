@@ -502,7 +502,7 @@
                     const docRef = doc(db, "artifacts", APP_ID, "public", "data", "chats", chatId);
                     await updateDoc(docRef, { controlledBy: 'ai' });
                 } else {
-                    console.log(" L-DEBUG: Il contenuto è ancora inappropriato. Il bot NSFW continua.");
+                    console.log(" L-DEBUG: Il contenuto è ancora inappropriato per Gemini. Il bot NSFW continua.");
                 }
             } catch (error) {
                 console.error("L-DEBUG: Errore durante il controllo di sicurezza:", error);
